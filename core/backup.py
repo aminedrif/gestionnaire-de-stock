@@ -6,7 +6,7 @@ import shutil
 import zipfile
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Dict
 import config
 from database.db_manager import db
 from .logger import logger

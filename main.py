@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Application de Gestion de Mini-Market
-Point d'entrée principal
+Point d'entrée principal avec interface PyQt5
 """
 import sys
 from pathlib import Path
@@ -12,6 +12,12 @@ sys.path.insert(0, str(Path(__file__).parent))
 import config
 from core.logger import logger
 from database.db_manager import db
+
+# Import PyQt5
+from PyQt5.QtWidgets import QApplication, QMessageBox
+from PyQt5.QtCore import Qt
+from ui.login_dialog import LoginDialog
+from ui.main_window import MainWindow
 
 
 def initialize_application():
@@ -42,27 +48,43 @@ def initialize_application():
 
 
 def main():
-    """Fonction principale"""
+    """Fonction principale avec interface PyQt5"""
     # Initialiser l'application
     if not initialize_application():
         print("Erreur lors de l'initialisation de l'application")
         sys.exit(1)
     
-    # TODO: Lancer l'interface graphique PyQt5
-    # Pour l'instant, on affiche juste un message
-    print("\n" + "=" * 60)
-    print(f"  {config.APP_NAME} v{config.APP_VERSION}")
-    print("=" * 60)
-    print("\n✓ Application initialisée avec succès!")
-    print(f"✓ Base de données: {config.DATABASE_PATH}")
-    print(f"✓ Logs: {config.LOG_CONFIG['log_file']}")
-    print("\n" + "=" * 60)
-    print("\nINFO: Interface graphique PyQt5 à implémenter")
-    print("Pour tester les modules, utilisez test_modules.py")
-    print("=" * 60)
+    # Créer l'application Qt
+    app = QApplication(sys.argv)
+    app.setApplicationName(config.APP_NAME)
+    app.setApplicationVersion(config.APP_VERSION)
     
-    # Garder la fenêtre ouverte
-    input("\nAppuyez sur Entrée pour quitter...")
+    # Configurer le style
+    app.setStyle('Fusion')
+    
+    # Afficher le dialogue de connexion
+    login_dialog = LoginDialog()
+    
+    if login_dialog.exec_() == LoginDialog.Accepted:
+        # Connexion réussie, obtenir les données utilisateur
+        from core.auth import auth_manager
+        user_data = auth_manager.get_current_user()
+        
+        if user_data:
+            # Créer et afficher la fenêtre principale
+            main_window = MainWindow(user_data)
+            main_window.showMaximized()
+            
+            # Lancer la boucle d'événements
+            sys.exit(app.exec_())
+        else:
+            logger.error("Erreur: Aucune donnée utilisateur après connexion")
+            QMessageBox.critical(None, "Erreur", "Erreur lors de la récupération des données utilisateur")
+            sys.exit(1)
+    else:
+        # Connexion annulée
+        logger.info("Connexion annulée par l'utilisateur")
+        sys.exit(0)
 
 
 if __name__ == "__main__":

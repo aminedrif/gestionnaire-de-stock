@@ -43,31 +43,35 @@ class AuthManager:
         if not user['is_active']:
             return False, "Ce compte est désactivé", None
         
+        # VERROUILLAGE DÉSACTIVÉ POUR LE DÉVELOPPEMENT
         # Vérifier si le compte est verrouillé
-        if user['locked_until']:
-            locked_until = datetime.fromisoformat(user['locked_until'])
-            if datetime.now() < locked_until:
-                minutes_left = int((locked_until - datetime.now()).total_seconds() / 60)
-                return False, f"Compte verrouillé. Réessayez dans {minutes_left} minutes", None
-            else:
-                # Déverrouiller le compte
-                self._unlock_account(user['id'])
+        # if user['locked_until']:
+        #     locked_until = datetime.fromisoformat(user['locked_until'])
+        #     if datetime.now() < locked_until:
+        #         minutes_left = int((locked_until - datetime.now()).total_seconds() / 60)
+        #         return False, f"Compte verrouillé. Réessayez dans {minutes_left} minutes", None
+        #     else:
+        #         # Déverrouiller le compte
+        #         self._unlock_account(user['id'])
         
         # Vérifier le mot de passe
         if not verify_password(password, user['password_hash']):
+            # VERROUILLAGE DÉSACTIVÉ
             # Incrémenter les tentatives échouées
-            self._increment_failed_attempts(user['id'])
+            # self._increment_failed_attempts(user['id'])
+            # 
+            # # Vérifier si on doit verrouiller le compte
+            # failed_attempts = user['failed_login_attempts'] + 1
+            # max_attempts = config.SECURITY_CONFIG['max_login_attempts']
+            # 
+            # if failed_attempts >= max_attempts:
+            #     self._lock_account(user['id'])
+            #     return False, "Trop de tentatives échouées. Compte verrouillé pour 30 minutes", None
+            # 
+            # remaining = max_attempts - failed_attempts
+            # return False, f"Mot de passe incorrect. {remaining} tentative(s) restante(s)", None
             
-            # Vérifier si on doit verrouiller le compte
-            failed_attempts = user['failed_login_attempts'] + 1
-            max_attempts = config.SECURITY_CONFIG['max_login_attempts']
-            
-            if failed_attempts >= max_attempts:
-                self._lock_account(user['id'])
-                return False, "Trop de tentatives échouées. Compte verrouillé pour 30 minutes", None
-            
-            remaining = max_attempts - failed_attempts
-            return False, f"Mot de passe incorrect. {remaining} tentative(s) restante(s)", None
+            return False, "Nom d'utilisateur ou mot de passe incorrect", None
         
         # Connexion réussie
         self._reset_failed_attempts(user['id'])

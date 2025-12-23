@@ -1,0 +1,1013 @@
+# -*- coding: utf-8 -*-
+"""
+Interface Point de Vente (POS)
+"""
+from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
+                             QPushButton, QLineEdit, QTableWidget, QTableWidgetItem,
+                             QComboBox, QFrame, QMessageBox, QHeaderView, QSpinBox,
+                             QDoubleSpinBox, QGroupBox, QGridLayout, QDialog,
+                             QFormLayout, QInputDialog, QAbstractItemView, QShortcut, QTextBrowser)
+from PyQt5.QtCore import Qt, QTimer
+# ... imports ...
+from modules.sales.printer import printer_manager
+
+class ReceiptPreviewDialog(QDialog):
+    """Dialogue d'aperçu du ticket"""
+    def __init__(self, sale_data, parent=None):
+        super().__init__(parent)
+        self.sale_data = sale_data
+        self.setWindowTitle(f"Aperçu Ticket #{sale_data['sale_number']}")
+        self.setMinimumSize(400, 600)
+        self.setup_ui()
+        
+    def setup_ui(self):
+        layout = QVBoxLayout()
+        
+        # Aperçu HTML
+        self.preview = QTextBrowser()
+        html = printer_manager.preview_receipt(self.sale_data)
+        self.preview.setHtml(html)
+        layout.addWidget(self.preview)
+        
+        # Boutons
+        btn_layout = QHBoxLayout()
+        
+        print_btn = QPushButton("🖨️ Imprimer")
+        print_btn.setStyleSheet("background-color: #3498db; color: white; padding: 10px;")
+        print_btn.clicked.connect(self.print_ticket)
+        
+        close_btn = QPushButton("Fermer")
+        close_btn.clicked.connect(self.accept)
+        
+        btn_layout.addWidget(print_btn)
+        btn_layout.addWidget(close_btn)
+        layout.addLayout(btn_layout)
+        
+        self.setLayout(layout)
+        
+    def print_ticket(self):
+        success, msg = printer_manager.print_receipt(self.sale_data)
+        if success:
+            QMessageBox.information(self, "Succès", msg)
+            self.accept()
+        else:
+            QMessageBox.warning(self, "Erreur", msg)
+from PyQt5.QtGui import QFont, QColor, QKeySequence
+from datetime import datetime
+from modules.products.product_manager import product_manager
+from modules.sales.cart import Cart
+from modules.sales.pos import pos_manager
+from modules.customers.customer_manager import customer_manager
+from modules.sales.printer import printer_manager
+from core.auth import auth_manager
+from core.logger import logger
+
+
+class ReturnDialog(QDialog):
+    """Dialogue de gestion des retours"""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Gestion des Retours / Annulations")
+        self.setMinimumWidth(600)
+        self.setMinimumHeight(400)
+        self.sale_data = None
+        self.setup_ui()
+        
+    def setup_ui(self):
+        layout = QVBoxLayout()
+        
+        # Recherche Vente
+        search_layout = QHBoxLayout()
+        self.sale_id_input = QLineEdit()
+        self.sale_id_input.setPlaceholderText("ID Vente ou Numéro Ticket...")
+        search_btn = QPushButton("🔍 Rechercher")
+        search_btn.clicked.connect(self.search_sale)
+        
+        search_layout.addWidget(QLabel("Vente:"))
+        search_layout.addWidget(self.sale_id_input)
+        search_layout.addWidget(search_btn)
+        layout.addLayout(search_layout)
+        
+        # Info Vente
+        self.info_label = QLabel("")
+        self.info_label.setStyleSheet("font-weight: bold; color: #34495e;")
+        layout.addWidget(self.info_label)
+        
+        # Liste articles
+        self.items_table = QTableWidget()
+        self.items_table.setColumnCount(5)
+        self.items_table.setHorizontalHeaderLabels(["Produit", "Qté Achetée", "Prix Unit.", "Qté Retour", "Sélection"])
+        self.items_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        layout.addWidget(self.items_table)
+        
+        # Actions
+        btn_layout = QHBoxLayout()
+        cancel_sale_btn = QPushButton("🗑️ Annuler TOUTE la vente")
+        cancel_sale_btn.setStyleSheet("background-color: #e74c3c; color: white;")
+        cancel_sale_btn.clicked.connect(self.cancel_entire_sale)
+        
+        process_return_btn = QPushButton("↩️ Retourner les articles sélectionnés")
+        process_return_btn.setStyleSheet("background-color: #f39c12; color: white;")
+        process_return_btn.clicked.connect(self.process_partial_return)
+        
+        btn_layout.addWidget(cancel_sale_btn)
+        
+        reprint_btn = QPushButton("🖨️ Réimprimer Ticket")
+        reprint_btn.setStyleSheet("background-color: #3498db; color: white;")
+        reprint_btn.clicked.connect(self.reprint_ticket)
+        btn_layout.addWidget(reprint_btn)
+        
+        btn_layout.addWidget(process_return_btn)
+        layout.addLayout(btn_layout)
+        
+        self.setLayout(layout)
+        
+    def search_sale(self):
+        term = self.sale_id_input.text().strip()
+        if not term:
+            return
+            
+        # Essayer de trouver par ID ou Numéro
+        # Pour simplifier, on suppose que l'utilisateur entre l'ID numérique
+        # Pour une vraie recherche par numéro (VNT-...), il faudrait une méthode search_sale dans pos_manager
+        
+        # Hack temporaire: Si c'est numérique, c'est l'ID. Sinon c'est complexe sans méthode de recherche dédiée.
+        # On va utiliser pos_manager.get_sale(id) si numérique.
+        
+        if term.isdigit():
+            sale = pos_manager.get_sale(int(term))
+        else:
+            # TODO: Implémenter get_sale_by_number dans pos_manager
+            QMessageBox.warning(self, "Info", "Recherche par numéro non implémentée, utilisez l'ID de vente (affiché dans les logs ou base)")
+            return
+            
+        if sale:
+            self.sale_data = sale
+            self.display_sale()
+        else:
+            QMessageBox.warning(self, "Erreur", "Vente introuvable")
+            
+    def display_sale(self):
+        if not self.sale_data:
+            return
+            
+        self.info_label.setText(f"Vente #{self.sale_data['sale_number']} - Total: {self.sale_data['total_amount']} DA - Date: {self.sale_data['sale_date']}")
+        
+        self.items_table.setRowCount(0)
+        items = self.sale_data.get('items', [])
+        
+        for item in items:
+            row = self.items_table.rowCount()
+            self.items_table.insertRow(row)
+            
+            self.items_table.setItem(row, 0, QTableWidgetItem(item['product_name']))
+            self.items_table.setItem(row, 1, QTableWidgetItem(str(item['quantity'])))
+            self.items_table.setItem(row, 2, QTableWidgetItem(f"{item['unit_price']:.2f}"))
+            
+            # SpinBox pour quantité retour
+            spin = QDoubleSpinBox()
+            spin.setRange(0, item['quantity'])
+            spin.setValue(0)
+            self.items_table.setCellWidget(row, 3, spin)
+            
+            # Checkbox
+            chk = QTableWidgetItem()
+            chk.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+            chk.setCheckState(Qt.Unchecked)
+            self.items_table.setItem(row, 4, chk)
+            
+    def cancel_entire_sale(self):
+        if not self.sale_data:
+            return
+            
+        confirm = QMessageBox.question(self, "Confirmer", "Annuler TOTALEMENT cette vente ? Stock sera restauré.", QMessageBox.Yes | QMessageBox.No)
+        if confirm == QMessageBox.Yes:
+            success, msg = pos_manager.cancel_sale(self.sale_data['id'], "Annulation utilisateur")
+            if success:
+                QMessageBox.information(self, "Succès", msg)
+                self.accept()
+            else:
+                QMessageBox.critical(self, "Erreur", msg)
+                
+    def process_partial_return(self):
+        if not self.sale_data:
+            return
+            
+        items_to_return = []
+        rows = self.items_table.rowCount()
+        original_items = self.sale_data.get('items', [])
+        
+        for i in range(rows):
+            if self.items_table.item(i, 4).checkState() == Qt.Checked:
+                qty = self.items_table.cellWidget(i, 3).value()
+                if qty > 0:
+                    # Trouver l'ID produit correspondant (supposons l'ordre conservé ou on stocke l'ID)
+                    # Mieux: stocker l'ID dans UserRole
+                    # Pour simplifier ici, on utilise l'index
+                    product_id = original_items[i]['product_id']
+                    items_to_return.append({'product_id': product_id, 'quantity': qty})
+        
+        if not items_to_return:
+            QMessageBox.warning(self, "Info", "Aucun article sélectionné ou quantité nulle")
+            return
+            
+        user = auth_manager.get_current_user()
+        user_id = user['id'] if user else 1
+            
+        success, msg, ret_id = pos_manager.process_return(
+            self.sale_data['id'], items_to_return, user_id, "Retour partiel"
+        )
+        
+        if success:
+            QMessageBox.information(self, "Succès", msg)
+            self.accept()
+        else:
+            QMessageBox.critical(self, "Erreur", msg)
+
+    def reprint_ticket(self):
+        """Réimprimer le ticket de la vente affichée"""
+        if not self.sale_data:
+            return
+            
+        printer_manager.print_receipt(self.sale_data, "standard")
+
+
+class POSPage(QWidget):
+    """Page Point de Vente"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.cart = pos_manager.get_cart()
+        self.current_customer = None
+        self.init_ui()
+        
+    def init_ui(self):
+        """Initialiser l'interface"""
+        layout = QHBoxLayout()
+        layout.setSpacing(15)
+        layout.setContentsMargins(15, 15, 15, 15)
+        
+        # Colonne gauche - Scanner et produits
+        self.left_panel_container = self.create_left_panel()
+        layout.addWidget(self.left_panel_container, 1) # Equal width
+        
+        # Colonne droite - Panier et paiement
+        self.right_panel_container = self.create_right_panel()
+        layout.addWidget(self.right_panel_container, 1) # Equal width
+        
+        self.setLayout(layout)
+        
+        # Focus sur le scanner
+        self.barcode_input.setFocus()
+
+        # Raccourcis Clavier POS
+        QShortcut(QKeySequence("F9"), self, self.process_payment) # F9 pour payer
+        QShortcut(QKeySequence("Ctrl+F"), self, lambda: self.search_input.setFocus()) # Ctrl+F pour recherche
+        QShortcut(QKeySequence("Ctrl+Space"), self, lambda: self.barcode_input.setFocus()) # Ctrl+Espace pour scanner
+    
+    def create_left_panel(self):
+        """Créer le panneau gauche"""
+        panel = QFrame()
+        panel.setObjectName("leftPanel")
+        panel.setStyleSheet("""
+            QFrame#leftPanel {
+                background-color: white;
+                border-radius: 10px;
+                padding: 15px;
+            }
+        """)
+        
+        layout = QVBoxLayout()
+        layout.setSpacing(15)
+        
+        # En-tête
+        header = QLabel("🛒 Point de Vente")
+        header.setStyleSheet("font-size: 24px; font-weight: bold; color: #667eea;")
+        layout.addWidget(header)
+        
+        # Scanner code-barres
+        scanner_group = QGroupBox("Scanner Code-Barres")
+        scanner_group.setStyleSheet("""
+            QGroupBox {
+                font-size: 14px;
+                font-weight: bold;
+                border: 2px solid #e0e0e0;
+                border-radius: 8px;
+                margin-top: 10px;
+                padding-top: 15px;
+            }
+            QGroupBox::title {
+                color: #667eea;
+            }
+        """)
+        scanner_layout = QVBoxLayout()
+        
+        self.barcode_input = QLineEdit()
+        self.barcode_input.setPlaceholderText("Scanner ou entrer le code-barres...")
+        self.barcode_input.setMinimumHeight(50)
+        self.barcode_input.setStyleSheet("""
+            QLineEdit {
+                padding: 10px 15px;
+                border: 2px solid #667eea;
+                border-radius: 8px;
+                font-size: 16px;
+                background-color: #f0f4ff;
+                color: #333;
+            }
+            QLineEdit:focus {
+                border-color: #764ba2;
+                background-color: white;
+            }
+        """)
+        self.barcode_input.returnPressed.connect(self.scan_product)
+        scanner_layout.addWidget(self.barcode_input)
+        
+        scanner_group.setLayout(scanner_layout)
+        layout.addWidget(scanner_group)
+        
+        # Recherche produit
+        search_group = QGroupBox("Recherche Produit")
+        search_group.setStyleSheet("""
+            QGroupBox {
+                font-size: 14px;
+                font-weight: bold;
+                border: 2px solid #e0e0e0;
+                border-radius: 8px;
+                margin-top: 10px;
+                padding-top: 15px;
+            }
+            QGroupBox::title {
+                color: #3498db;
+            }
+        """)
+        search_layout = QHBoxLayout()
+        
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("Rechercher par nom...")
+        self.search_input.setMinimumHeight(45)
+        self.search_input.setStyleSheet("""
+            QLineEdit {
+                padding: 10px 15px;
+                border: 2px solid #e0e0e0;
+                border-radius: 8px;
+                font-size: 14px;
+                color: #333;
+            }
+            QLineEdit:focus {
+                border-color: #3498db;
+            }
+        """)
+        self.search_input.textChanged.connect(self.search_products)
+        search_layout.addWidget(self.search_input)
+        
+        search_btn = QPushButton("🔍")
+        search_btn.setMinimumSize(45, 45)
+        search_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3498db;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-size: 18px;
+            }
+            QPushButton:hover {
+                background-color: #2980b9;
+            }
+        """)
+        search_btn.clicked.connect(self.search_products)
+        search_layout.addWidget(search_btn)
+        
+        search_group.setLayout(search_layout)
+        layout.addWidget(search_group)
+        
+        # Liste des produits trouvés
+        self.products_table = QTableWidget()
+        self.products_table.setColumnCount(5)
+        self.products_table.setHorizontalHeaderLabels(["Code", "Nom", "Prix", "Stock", "Action"])
+        self.products_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.products_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.products_table.setEditTriggers(QAbstractItemView.NoEditTriggers) # Read-only
+        self.products_table.setAlternatingRowColors(True)
+        self.products_table.setStyleSheet("""
+            QTableWidget {
+                border: 2px solid #e0e0e0;
+                border-radius: 8px;
+                background-color: white;
+                gridline-color: #f0f0f0;
+                color: #333;
+            }
+            QTableWidget::item {
+                padding: 8px;
+            }
+            QHeaderView::section {
+                background-color: #f8f9fa;
+                padding: 10px;
+                border: none;
+                font-weight: bold;
+                color: #333;
+            }
+        """)
+        layout.addWidget(self.products_table)
+        
+        panel.setLayout(layout)
+        return panel
+    
+    def create_right_panel(self):
+        """Créer le panneau droit"""
+        panel = QFrame()
+        panel.setObjectName("rightPanel")
+        panel.setStyleSheet("""
+            QFrame#rightPanel {
+                background-color: white;
+                border-radius: 10px;
+                padding: 15px;
+            }
+        """)
+        
+        layout = QVBoxLayout()
+        layout.setSpacing(15)
+        
+        # Client
+        customer_group = QGroupBox("👤 Client")
+        customer_group.setStyleSheet("""
+            QGroupBox {
+                font-size: 14px;
+                font-weight: bold;
+                border: 2px solid #e0e0e0;
+                border-radius: 8px;
+                margin-top: 10px;
+                padding-top: 15px;
+            }
+        """)
+        customer_layout = QHBoxLayout()
+        
+        self.customer_combo = QComboBox()
+        self.customer_combo.setMinimumHeight(40)
+        self.customer_combo.addItem("Client anonyme", None)
+        self.load_customers()
+        self.customer_combo.setStyleSheet("""
+            QComboBox {
+                padding: 8px 12px;
+                border: 2px solid #e0e0e0;
+                border-radius: 6px;
+                font-size: 13px;
+                color: #333;
+            }
+            QComboBox QAbstractItemView {
+                color: #333;
+            }
+        """)
+        customer_layout.addWidget(self.customer_combo)
+        
+        customer_group.setLayout(customer_layout)
+        layout.addWidget(customer_group)
+        
+        # Panier
+        cart_label = QLabel("🛒 Panier")
+        cart_label.setStyleSheet("font-size: 18px; font-weight: bold; color: #2ecc71;")
+        layout.addWidget(cart_label)
+        
+        self.cart_table = QTableWidget()
+        self.cart_table.setColumnCount(5)
+        self.cart_table.setHorizontalHeaderLabels(["Produit", "Prix", "Qté", "Total", "❌"])
+        self.cart_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        self.cart_table.setEditTriggers(QAbstractItemView.NoEditTriggers) # Read-only
+        self.cart_table.setStyleSheet("""
+            QTableWidget {
+                border: 2px solid #e0e0e0;
+                border-radius: 8px;
+                gridline-color: #f0f0f0;
+                color: #333;
+                background-color: white;
+            }
+            QHeaderView::section {
+                background-color: #f8f9fa;
+                padding: 8px;
+                font-weight: bold;
+                color: #333;
+            }
+        """)
+        layout.addWidget(self.cart_table)
+        
+        # Totaux
+        self.totals_frame = QFrame()
+        self.totals_frame.setStyleSheet("""
+            QFrame {
+                background-color: #f8f9fa;
+                border-radius: 8px;
+                padding: 15px;
+            }
+        """)
+        totals_layout = QVBoxLayout()
+        
+        self.subtotal_label = QLabel("Sous-total: 0.00 DA")
+        self.subtotal_label.setStyleSheet("font-size: 16px; color: #666;")
+        totals_layout.addWidget(self.subtotal_label)
+        
+        self.discount_label = QLabel("Remise: 0.00 DA")
+        self.discount_label.setStyleSheet("font-size: 16px; color: #e67e22;")
+        totals_layout.addWidget(self.discount_label)
+        
+        self.total_label = QLabel("TOTAL: 0.00 DA")
+        self.total_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #2ecc71;")
+        totals_layout.addWidget(self.total_label)
+        
+        self.totals_frame.setLayout(totals_layout)
+        layout.addWidget(self.totals_frame)
+        
+        # Paiement
+        payment_group = QGroupBox("💳 Paiement")
+        payment_group.setStyleSheet("""
+            QGroupBox {
+                font-size: 14px;
+                font-weight: bold;
+                border: 2px solid #e0e0e0;
+                border-radius: 8px;
+                margin-top: 10px;
+                padding-top: 15px;
+            }
+        """)
+        payment_layout = QVBoxLayout()
+        
+        self.payment_method = QComboBox()
+        self.payment_method.addItem("💵 Espèces", "cash")
+        self.payment_method.addItem("💳 Carte", "card")
+        self.payment_method.addItem("📝 Crédit", "credit")
+        self.payment_method.setMinimumHeight(40)
+        self.payment_method.setStyleSheet("""
+            QComboBox {
+                padding: 8px 12px;
+                border: 2px solid #e0e0e0;
+                border-radius: 6px;
+                font-size: 14px;
+                color: #333;
+            }
+            QComboBox QAbstractItemView {
+                color: #333;
+            }
+        """)
+        payment_layout.addWidget(self.payment_method)
+        
+        payment_group.setLayout(payment_layout)
+        layout.addWidget(payment_group)
+        
+        # Boutons d'action
+        buttons_layout = QVBoxLayout()
+        buttons_layout.setSpacing(10)
+        
+        # Bouton Payer
+        pay_btn = QPushButton("💰 PAYER")
+        pay_btn.setMinimumHeight(60)
+        pay_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2ecc71;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-size: 18px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #27ae60;
+            }
+            QPushButton:pressed {
+                background-color: #229954;
+            }
+        """)
+        pay_btn.clicked.connect(self.process_payment)
+        buttons_layout.addWidget(pay_btn)
+        
+        # Boutons secondaires
+        secondary_layout = QHBoxLayout()
+        
+        clear_btn = QPushButton("🗑️ Vider")
+        clear_btn.setMinimumHeight(45)
+        clear_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #e74c3c;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #c0392b;
+            }
+        """)
+        clear_btn.clicked.connect(self.clear_cart)
+        secondary_layout.addWidget(clear_btn)
+        
+        discount_btn = QPushButton("🏷️ Remise")
+        discount_btn.setMinimumHeight(45)
+        discount_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f39c12;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #e67e22;
+            }
+        """)
+        discount_btn.clicked.connect(self.apply_discount)
+        secondary_layout.addWidget(discount_btn)
+        
+        # Bouton Retour
+        return_btn = QPushButton("↩️ Retour")
+        return_btn.setMinimumHeight(45)
+        return_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #95a5a6;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #7f8c8d;
+            }
+        """)
+        return_btn.clicked.connect(self.open_returns)
+        secondary_layout.addWidget(return_btn)
+        
+        buttons_layout.addLayout(secondary_layout)
+        layout.addLayout(buttons_layout)
+        
+        panel.setLayout(layout)
+        return panel
+    
+    def set_dark_mode(self, is_dark):
+        """Appliquer le mode sombre"""
+        if is_dark:
+            # Mode sombre
+            main_bg = "#2c3e50"
+            panel_bg = "#34495e"
+            text_color = "white"
+            input_bg = "#2c3e50"
+            
+            self.left_panel_container.setStyleSheet(f"""
+                QFrame#leftPanel {{
+                    background-color: {panel_bg};
+                    border-radius: 10px;
+                    padding: 15px;
+                    color: {text_color};
+                }}
+            """)
+            
+            self.right_panel_container.setStyleSheet(f"""
+                QFrame#rightPanel {{
+                    background-color: {panel_bg};
+                    border-radius: 10px;
+                    padding: 15px;
+                    color: {text_color};
+                }}
+            """)
+            
+            # Mise à jour des tables
+            table_style = f"""
+                QTableWidget {{
+                    border: 2px solid #555;
+                    border-radius: 8px;
+                    background-color: #2c3e50;
+                    gridline-color: #555;
+                    color: white;
+                }}
+                QHeaderView::section {{
+                    background-color: #455a64;
+                    padding: 10px;
+                    border: none;
+                    font-weight: bold;
+                    color: white;
+                }}
+            """
+            self.products_table.setStyleSheet(table_style)
+            self.cart_table.setStyleSheet(table_style)
+            
+            # Mise à jour des inputs
+            input_style = f"""
+                QLineEdit {{
+                    padding: 10px 15px;
+                    border: 2px solid #667eea;
+                    border-radius: 8px;
+                    font-size: 16px;
+                    background-color: #2c3e50;
+                    color: white;
+                }}
+            """
+            self.barcode_input.setStyleSheet(input_style)
+            self.search_input.setStyleSheet(input_style.replace("16px", "14px").replace("#667eea", "white"))
+            
+            # ComboBoxes
+            combo_style = """
+                QComboBox {
+                    padding: 8px 12px;
+                    border: 2px solid #555;
+                    border-radius: 6px;
+                    font-size: 14px;
+                    color: white;
+                    background-color: #2c3e50;
+                }
+                QComboBox QAbstractItemView {
+                    background-color: #2c3e50;
+                    color: white;
+                    selection-background-color: #667eea;
+                }
+            """
+            self.customer_combo.setStyleSheet(combo_style)
+            self.payment_method.setStyleSheet(combo_style)
+            
+        else:
+            # Mode clair (reset aux styles d'origine)
+            self.left_panel_container.setStyleSheet("""
+                QFrame#leftPanel {
+                    background-color: white;
+                    border-radius: 10px;
+                    padding: 15px;
+                }
+            """)
+            self.right_panel_container.setStyleSheet("""
+                QFrame#rightPanel {
+                    background-color: white;
+                    border-radius: 10px;
+                    padding: 15px;
+                }
+            """)
+            
+            # Tables
+            table_style = """
+                QTableWidget {
+                    border: 2px solid #e0e0e0;
+                    border-radius: 8px;
+                    background-color: white;
+                    gridline-color: #f0f0f0;
+                    color: #333;
+                }
+                QHeaderView::section {
+                    background-color: #f8f9fa;
+                    padding: 10px;
+                    border: none;
+                    font-weight: bold;
+                    color: #333;
+                }
+            """
+            self.products_table.setStyleSheet(table_style)
+            self.cart_table.setStyleSheet(table_style)
+            
+            # Inputs
+            input_style = """
+                QLineEdit {
+                    padding: 10px 15px;
+                    border: 2px solid #667eea;
+                    border-radius: 8px;
+                    font-size: 16px;
+                    background-color: #f0f4ff;
+                    color: #333;
+                }
+            """
+            self.barcode_input.setStyleSheet(input_style)
+            
+            # Combo
+            combo_style = """
+                QComboBox {
+                    padding: 8px 12px;
+                    border: 2px solid #e0e0e0;
+                    border-radius: 6px;
+                    font-size: 14px;
+                    color: #333;
+                }
+            """
+            self.customer_combo.setStyleSheet(combo_style)
+            self.payment_method.setStyleSheet(combo_style)
+
+    def load_customers(self):
+        """Charger la liste des clients"""
+        try:
+            customers = customer_manager.get_all_customers()
+            for customer in customers:
+                self.customer_combo.addItem(
+                    f"{customer['full_name']} ({customer['code']})",
+                    customer['id']
+                )
+        except Exception as e:
+            logger.error(f"Erreur chargement clients: {e}")
+    
+    def scan_product(self):
+        """Scanner un produit par code-barres"""
+        barcode = self.barcode_input.text().strip()
+        if not barcode:
+            return
+        
+        try:
+            product = product_manager.get_product_by_barcode(barcode)
+            if product:
+                self.add_to_cart(product)
+                self.barcode_input.clear()
+            else:
+                QMessageBox.warning(self, "Produit introuvable", 
+                                  f"Aucun produit avec le code-barres: {barcode}")
+                self.barcode_input.clear()
+        except Exception as e:
+            logger.error(f"Erreur scan produit: {e}")
+            QMessageBox.critical(self, "Erreur", f"Erreur lors du scan: {e}")
+    
+    def search_products(self):
+        """Rechercher des produits"""
+        search_term = self.search_input.text().strip()
+        
+        try:
+            products = product_manager.search_products(search_term) if search_term else []
+            self.display_products(products)
+        except Exception as e:
+            logger.error(f"Erreur recherche produits: {e}")
+    
+    def display_products(self, products):
+        """Afficher les produits trouvés"""
+        self.products_table.setRowCount(0)
+        self.last_search_results = products  # Stocker pour double-click
+        
+        for i, product in enumerate(products):
+            row = self.products_table.rowCount()
+            self.products_table.insertRow(row)
+            
+            self.products_table.setItem(row, 0, QTableWidgetItem(product['barcode'] or ''))
+            self.products_table.setItem(row, 1, QTableWidgetItem(product['name']))
+            self.products_table.setItem(row, 2, QTableWidgetItem(f"{product['selling_price']:.2f} DA"))
+            item_stock = QTableWidgetItem(str(product['stock_quantity']))
+            if product['stock_quantity'] <= product['min_stock_level']:
+                 item_stock.setForeground(QColor("red"))
+            self.products_table.setItem(row, 3, item_stock)
+            
+            # Bouton Ajouter
+            add_btn = QPushButton("➕ Ajouter")
+            add_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #3498db;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    padding: 5px 10px;
+                }
+                QPushButton:hover {
+                    background-color: #2980b9;
+                }
+            """)
+            add_btn.clicked.connect(lambda checked, p=product: self.add_to_cart(p))
+            self.products_table.setCellWidget(row, 4, add_btn)
+
+    def on_product_double_click(self, row, column):
+        """Ajouter au panier sur double click"""
+        if hasattr(self, 'last_search_results') and 0 <= row < len(self.last_search_results):
+            product = self.last_search_results[row]
+            self.add_to_cart(product)
+
+    def add_to_cart(self, product):
+        """Ajouter un produit au panier"""
+        try:
+            success, message = self.cart.add_item(product, 1)
+            
+            if success:
+                self.update_cart_display()
+                logger.info(f"Produit ajouté au panier: {product['name']}")
+            else:
+                logger.warning(f"Échec ajout panier ({product['name']}): {message}")
+                QMessageBox.warning(self, "Impossible d'ajouter", message)
+                
+        except Exception as e:
+            logger.error(f"Erreur ajout panier: {e}")
+            QMessageBox.critical(self, "Erreur", f"Une erreur est survenue: {e}")
+
+    
+    def update_cart_display(self):
+        """Mettre à jour l'affichage du panier"""
+        self.cart_table.setRowCount(0)
+        
+        for item in self.cart.items:
+            row = self.cart_table.rowCount()
+            self.cart_table.insertRow(row)
+            
+            self.cart_table.setItem(row, 0, QTableWidgetItem(item.product_name))
+            self.cart_table.setItem(row, 1, QTableWidgetItem(f"{item.unit_price:.2f}"))
+            self.cart_table.setItem(row, 2, QTableWidgetItem(str(item.quantity)))
+            self.cart_table.setItem(row, 3, QTableWidgetItem(f"{item.get_subtotal():.2f}"))
+            
+            # Bouton supprimer
+            remove_btn = QPushButton("❌")
+            remove_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #e74c3c;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                }
+            """)
+            remove_btn.clicked.connect(lambda checked, pid=item.product_id: self.remove_from_cart(pid))
+            self.cart_table.setCellWidget(row, 4, remove_btn)
+        
+        # Mettre à jour les totaux
+        subtotal = self.cart.get_subtotal()
+        discount = self.cart.get_discount_amount()
+        total = self.cart.get_total()
+        
+        self.subtotal_label.setText(f"Sous-total: {subtotal:.2f} DA")
+        self.discount_label.setText(f"Remise: {discount:.2f} DA")
+        self.total_label.setText(f"TOTAL: {total:.2f} DA")
+    
+    def remove_from_cart(self, product_id):
+        """Retirer un produit du panier"""
+        self.cart.remove_item(product_id)
+        self.update_cart_display()
+    
+    def clear_cart(self):
+        """Vider le panier"""
+        reply = QMessageBox.question(
+            self, "Confirmation",
+            "Voulez-vous vraiment vider le panier ?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            self.cart.clear()
+            self.update_cart_display()
+    
+    def apply_discount(self):
+        """Appliquer une remise"""
+        discount, ok = QInputDialog.getDouble(
+            self, "Remise",
+            "Montant de la remise (DA):",
+            0, 0, 100000, 2
+        )
+        
+        if ok:
+            success, message = self.cart.set_discount_amount(discount)
+            if success:
+                self.update_cart_display()
+            else:
+                QMessageBox.warning(self, "Erreur", message)
+                
+    def open_returns(self):
+        """Ouvrir le dialogue de retours"""
+        dialog = ReturnDialog(self)
+        dialog.exec_()
+    
+    def process_payment(self):
+        """Traiter le paiement"""
+        # Check explicitement si items est vide
+        if not self.cart.items:
+            # Double vérification avec is_empty si disponible
+            if hasattr(self.cart, 'is_empty') and self.cart.is_empty():
+                QMessageBox.warning(self, "Panier vide", "Ajoutez des produits avant de payer")
+                return
+            elif not self.cart.items:
+                QMessageBox.warning(self, "Panier vide", "Ajoutez des produits avant de payer")
+                return
+        
+        try:
+            customer_id = self.customer_combo.currentData()
+            payment_method = self.payment_method.currentData()
+            
+            # Obtenir l'utilisateur actuel (caissier)
+            current_user = auth_manager.get_current_user()
+            cashier_id = current_user['id'] if current_user else 1
+            
+            success, message, sale_id = pos_manager.complete_sale(
+                cashier_id,
+                payment_method,
+                self.cart.get_total(), 
+                customer_id
+            )
+            
+            if success:
+                # Rafraîchir la référence du panier (car recréé dans POSManager)
+                self.cart = pos_manager.get_cart()
+                self.update_cart_display()
+                
+                # Réinitialiser champs
+                self.customer_combo.setCurrentIndex(0)
+                self.payment_method.setCurrentIndex(0)
+                
+                # Afficher l'aperçu du ticket
+                sale_data = pos_manager.get_sale(sale_id)
+                if sale_data:
+                    preview = ReceiptPreviewDialog(sale_data, self)
+                    preview.exec_()
+                
+            else:
+                QMessageBox.warning(self, "Erreur", message)
+                
+        except Exception as e:
+            logger.error(f"Erreur paiement: {e}")
+            QMessageBox.critical(self, "Erreur", f"Une erreur est survenue: {e}")
+
+            QMessageBox.critical(self, "Erreur", f"Erreur lors du paiement: {e}")
+
+    def refresh(self):
+        """Rafraîchir les données de la page"""
+        self.customer_combo.clear()
+        self.customer_combo.addItem("Client anonyme", None)
+        self.load_customers()
+        self.barcode_input.setFocus()

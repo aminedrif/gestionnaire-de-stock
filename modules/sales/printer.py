@@ -173,7 +173,9 @@ class PrinterManager:
             printer.setPageSize(QPrinter.A4)
             
             # Afficher le dialogue d'impression
-            dialog = QPrintDialog(printer)
+            app = QApplication.instance()
+            parent = app.activeWindow() if app else None
+            dialog = QPrintDialog(printer, parent)
             if dialog.exec_() == QPrintDialog.Accepted:
                 document.print_(printer)
                 logger.info(f"Ticket imprimé (standard): {sale_data['sale_number']}")

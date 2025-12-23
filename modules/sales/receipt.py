@@ -153,9 +153,9 @@ class ReceiptGenerator:
             x_center = 40 * mm
             
             # En-tête
-            c.setFont("Helvetica-Bold", 12)
+            c.setFont("Helvetica-Bold", 18)
             c.drawCentredString(x_center, y, self.store_config['name'])
-            y -= 5 * mm
+            y -= 7 * mm
             
             c.setFont("Helvetica", 8)
             c.drawCentredString(x_center, y, self.store_config['address'])

@@ -20,17 +20,17 @@ for directory in [DATA_DIR, LOGS_DIR, RESOURCES_DIR, BACKUP_DIR]:
 DATABASE_PATH = DATA_DIR / "minimarket.db"
 
 # Paramètres de l'application
-APP_NAME = "Gestion Mini-Market"
+APP_NAME = "Gestion Supérette AKHRIB"
 APP_VERSION = "1.0.0"
-COMPANY_NAME = "Votre Mini-Market"
+COMPANY_NAME = "Supérette AKHRIB"
 
 # Paramètres du magasin (modifiables via interface)
 STORE_CONFIG = {
-    "name": "Mini-Market",
+    "name": "Supérette AKHRIB",
     "address": "123 Rue Principale",
     "city": "Ville",
     "phone": "+213 XX XX XX XX",
-    "email": "contact@minimarket.dz",
+    "email": "contact@superette-akhrib.dz",
     "tax_id": "000000000000000",  # NIF
     "currency": "DA",  # Dinar Algérien
     "currency_symbol": "DA",
@@ -114,6 +114,9 @@ PERMISSIONS = {
         "process_returns",
         "manage_backups",
         "view_audit_log",
+        "view_products",
+        "view_customers",
+        "view_suppliers",
     ],
     "cashier": [
         "make_sales",
