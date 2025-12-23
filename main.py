@@ -6,8 +6,8 @@ Point d'entrée principal avec interface PyQt5
 import sys
 from pathlib import Path
 
-# Ajouter le répertoire courant au path
-sys.path.insert(0, str(Path(__file__).parent))
+# Ajouter le dossier parent au chemin Python
+sys.path.append(str(Path(__file__).parent))
 
 import config
 from core.logger import logger
@@ -18,7 +18,6 @@ from PyQt5.QtWidgets import QApplication, QMessageBox
 from PyQt5.QtCore import Qt
 from ui.login_dialog import LoginDialog
 from ui.main_window import MainWindow
-
 
 def initialize_application():
     """Initialiser l'application"""
@@ -45,7 +44,6 @@ def initialize_application():
         logger.critical(f"Erreur lors de l'initialisation: {e}")
         logger.exception("Détails de l'erreur:")
         return False
-
 
 def main():
     """Fonction principale avec interface PyQt5"""
@@ -85,7 +83,6 @@ def main():
         # Connexion annulée
         logger.info("Connexion annulée par l'utilisateur")
         sys.exit(0)
-
 
 if __name__ == "__main__":
     main()
