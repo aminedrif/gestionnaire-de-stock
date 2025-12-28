@@ -7,11 +7,12 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                              QComboBox, QFrame, QMessageBox, QHeaderView, QDialog,
                              QFormLayout, QSpinBox, QDoubleSpinBox, QDateEdit,
                              QCheckBox, QTabWidget, QGroupBox, QTextEdit, QAbstractItemView)
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QColor, QFont
 from modules.customers.customer_manager import customer_manager
 from core.auth import auth_manager
 from core.logger import logger
+from core.i18n import i18n_manager
 
 class CustomerFormDialog(QDialog):
     """Dialogue d'ajout/modification de client"""
@@ -19,11 +20,13 @@ class CustomerFormDialog(QDialog):
     def __init__(self, customer=None, parent=None):
         super().__init__(parent)
         self.customer = customer
-        self.setWindowTitle("Nouveau Client" if not customer else "Modifier Client")
+        _ = i18n_manager.get
+        self.setWindowTitle(_("customer_dialog_new") if not customer else _("customer_dialog_edit"))
         self.setMinimumWidth(400)
         self.setup_ui()
         
     def setup_ui(self):
+        _ = i18n_manager.get
         layout = QFormLayout()
         
         self.name_edit = QLineEdit()
@@ -35,19 +38,19 @@ class CustomerFormDialog(QDialog):
         self.credit_limit_spin.setValue(0)
         self.credit_limit_spin.setSuffix(" DA")
         
-        layout.addRow("Nom Complet *:", self.name_edit)
-        layout.addRow("Téléphone:", self.phone_edit)
-        layout.addRow("Email:", self.email_edit)
-        layout.addRow("Adresse:", self.address_edit)
-        layout.addRow("Limite de Crédit:", self.credit_limit_spin)
+        layout.addRow(_("label_fullname"), self.name_edit)
+        layout.addRow(_("label_phone"), self.phone_edit)
+        layout.addRow(_("label_email"), self.email_edit)
+        layout.addRow(_("label_address"), self.address_edit)
+        layout.addRow(_("label_credit_limit"), self.credit_limit_spin)
         
         # Boutons
         btn_layout = QHBoxLayout()
-        save_btn = QPushButton("Enregistrer")
+        save_btn = QPushButton(_("btn_save"))
         save_btn.setDefault(True)
         save_btn.setAutoDefault(True)
         save_btn.clicked.connect(self.save)
-        cancel_btn = QPushButton("Annuler")
+        cancel_btn = QPushButton(_("btn_cancel"))
         cancel_btn.clicked.connect(self.reject)
         
         btn_layout.addWidget(cancel_btn)
@@ -64,8 +67,9 @@ class CustomerFormDialog(QDialog):
             self.credit_limit_spin.setValue(self.customer.get('credit_limit', 0))
             
     def save(self):
+        _ = i18n_manager.get
         if not self.name_edit.text():
-            QMessageBox.warning(self, "Erreur", "Le nom est obligatoire.")
+            QMessageBox.warning(self, _("title_error"), _("msg_name_required"))
             return
             
         data = {
@@ -84,7 +88,8 @@ class CustomerFormDialog(QDialog):
         if success:
             self.accept()
         else:
-            QMessageBox.critical(self, "Erreur", msg)
+            _ = i18n_manager.get
+            QMessageBox.critical(self, _("title_error"), msg)
 
 class PaymentDialog(QDialog):
     """Dialogue de paiement de crédit"""
@@ -97,13 +102,15 @@ class PaymentDialog(QDialog):
         except (ValueError, TypeError):
              self.customer['current_credit'] = 0.0
              
-        self.setWindowTitle(f"Règlement Crédit: {self.customer['full_name']}")
+        _ = i18n_manager.get
+        self.setWindowTitle(_("payment_dialog_title").format(self.customer['full_name']))
         self.setup_ui()
         
     def setup_ui(self):
+        _ = i18n_manager.get
         layout = QVBoxLayout()
         
-        info = QLabel(f"Crédit actuel: {self.customer['current_credit']:g} DA")
+        info = QLabel(_("label_current_credit").format(self.customer['current_credit']))
         info.setStyleSheet("font-size: 16px; font-weight: bold; color: #e74c3c;")
         layout.addWidget(info)
         
@@ -115,18 +122,25 @@ class PaymentDialog(QDialog):
         self.amount_spin.valueChanged.connect(self.update_remaining)
         
         self.notes_edit = QLineEdit()
-        self.notes_edit.setPlaceholderText("Note optionnelle...")
+        self.notes_edit.setPlaceholderText(_("placeholder_note"))
         
-        form.addRow("Montant à régler:", self.amount_spin)
-        form.addRow("Note:", self.notes_edit)
+        form.addRow(_("label_amount_pay"), self.amount_spin)
+        form.addRow(_("label_note"), self.notes_edit)
         layout.addLayout(form)
         
         # Nouveau solde
-        self.remaining_label = QLabel(f"Nouveau solde: {(self.customer['current_credit'] - self.amount_spin.value()):g} DA")
+        remaining = self.customer['current_credit'] - self.amount_spin.value()
+        self.remaining_label = QLabel(_("label_new_balance").format(remaining))
         self.remaining_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #2c3e50;")
         layout.addWidget(self.remaining_label)
         
-        btn = QPushButton("Valider Paiement")
+        # Checkbox imprimer reçu
+        self.print_receipt_cb = QCheckBox(_("checkbox_print_payment"))
+        self.print_receipt_cb.setChecked(True)
+        self.print_receipt_cb.setStyleSheet("font-size: 13px; margin-top: 5px;")
+        layout.addWidget(self.print_receipt_cb)
+        
+        btn = QPushButton(_("btn_validate_payment"))
         btn.clicked.connect(self.save)
         btn.setStyleSheet("background-color: #2ecc71; color: white; padding: 10px;")
         layout.addWidget(btn)
@@ -135,8 +149,9 @@ class PaymentDialog(QDialog):
         
     def update_remaining(self):
         """Mettre à jour le solde restant"""
+        _ = i18n_manager.get
         remaining = self.customer['current_credit'] - self.amount_spin.value()
-        self.remaining_label.setText(f"Nouveau solde: {remaining:g} DA")
+        self.remaining_label.setText(_("label_new_balance").format(remaining))
         if remaining < 0:
              self.remaining_label.setStyleSheet("font-size: 14px; font-weight: bold; color: green;")
         else:
@@ -155,22 +170,57 @@ class PaymentDialog(QDialog):
         )
         
         if success:
-            QMessageBox.information(self, "Succès", msg)
+            # Print receipt if checkbox is checked
+            if self.print_receipt_cb.isChecked():
+                self.print_payment_receipt(amount)
+            
+            _ = i18n_manager.get
+            QMessageBox.information(self, _("title_success"), msg)
             self.accept()
         else:
-            QMessageBox.critical(self, "Erreur", msg)
+            _ = i18n_manager.get
+            QMessageBox.critical(self, _("title_error"), msg)
+    
+    def print_payment_receipt(self, amount):
+        """Generate and print a payment receipt"""
+        from datetime import datetime
+        from modules.sales.printer import printer_manager
+        
+        _ = i18n_manager.get
+        receipt_data = {
+            'sale_number': f"PAY-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+            'sale_date': datetime.now().strftime('%Y-%m-%d %H:%M'),
+            'customer_name': self.customer['full_name'],
+            'items': [{'product_name': _('receipt_item_payment'), 'quantity': 1, 'unit_price': amount, 'subtotal': amount}],
+            'total_amount': amount,
+            'payment_method': 'cash',
+            'amount_paid': amount,
+            'change_amount': 0,
+            'notes': self.notes_edit.text() or _('default_payment_note')
+        }
+        
+        try:
+            printer_manager.print_receipt(receipt_data, "standard")
+        except Exception as e:
+            logger.warning(f"Erreur impression reçu paiement: {e}")
 
 class CustomersPage(QWidget):
     """Page de gestion des clients"""
+    navigate_to = pyqtSignal(str, dict) # Pour naviguer vers l'historique avec un filtre
     
     def __init__(self, parent=None):
         super().__init__(parent)
         self.init_ui()
         self.load_customers()
         
+        i18n_manager.language_changed.connect(self.update_ui_text)
+        self.update_ui_text()
+        
     def init_ui(self):
         layout = QVBoxLayout()
         layout.setSpacing(15)
+        
+        _ = i18n_manager.get
         
         # En-tête avec gradient
         header_frame = QFrame()
@@ -186,13 +236,13 @@ class CustomersPage(QWidget):
         header_layout = QHBoxLayout(header_frame)
         
         title_layout = QVBoxLayout()
-        header = QLabel("👥 Gestion des Clients")
-        header.setStyleSheet("font-size: 24px; font-weight: bold; color: white; background: transparent;")
-        title_layout.addWidget(header)
+        self.header = QLabel(_("customers_title"))
+        self.header.setStyleSheet("font-size: 24px; font-weight: bold; color: white; background: transparent;")
+        title_layout.addWidget(self.header)
         
-        subtitle = QLabel("Gérez vos clients et leur crédit")
-        subtitle.setStyleSheet("font-size: 14px; color: rgba(255,255,255,0.9); background: transparent;")
-        title_layout.addWidget(subtitle)
+        self.subtitle = QLabel(_("customers_subtitle"))
+        self.subtitle.setStyleSheet("font-size: 14px; color: rgba(255,255,255,0.9); background: transparent;")
+        title_layout.addWidget(self.subtitle)
         
         header_layout.addLayout(title_layout)
         header_layout.addStretch()
@@ -203,7 +253,7 @@ class CustomersPage(QWidget):
         toolbar.setSpacing(10)
         
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("🔍 Rechercher client...")
+        self.search_input.setPlaceholderText(_("placeholder_search_customer"))
         self.search_input.setMinimumHeight(50)
         self.search_input.setStyleSheet("""
             QLineEdit {
@@ -225,7 +275,11 @@ class CustomersPage(QWidget):
         self.filter_combo = QComboBox()
         self.filter_combo.setMinimumHeight(50)
         self.filter_combo.setMinimumWidth(200)
-        self.filter_combo.addItems(["Tous les clients", "Avec dettes (Crédit > 0)", "Meilleurs clients"])
+        self.filter_combo.addItems([
+            _("filter_all_customers"), 
+            _("filter_with_debt"), 
+            _("filter_best_customers")
+        ])
         self.filter_combo.setStyleSheet("""
             QComboBox {
                 border: 2px solid #e5e7eb;
@@ -242,10 +296,10 @@ class CustomersPage(QWidget):
         self.filter_combo.currentIndexChanged.connect(self.load_customers)
         toolbar.addWidget(self.filter_combo)
         
-        new_btn = QPushButton("➕ Nouveau Client")
-        new_btn.setMinimumHeight(50)
-        new_btn.setCursor(Qt.PointingHandCursor)
-        new_btn.setStyleSheet("""
+        self.new_btn = QPushButton(_("btn_new_customer"))
+        self.new_btn.setMinimumHeight(50)
+        self.new_btn.setCursor(Qt.PointingHandCursor)
+        self.new_btn.setStyleSheet("""
             QPushButton {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
                     stop:0 #10b981, stop:1 #059669);
@@ -261,15 +315,15 @@ class CustomersPage(QWidget):
                     stop:0 #059669, stop:1 #047857);
             }
         """)
-        new_btn.clicked.connect(self.open_new_dialog)
-        toolbar.addWidget(new_btn)
+        self.new_btn.clicked.connect(self.open_new_dialog)
+        toolbar.addWidget(self.new_btn)
         
         layout.addLayout(toolbar)
         
         # Table - Style amélioré
         self.table = QTableWidget()
         self.table.setColumnCount(6)
-        self.table.setHorizontalHeaderLabels(["Code", "Nom", "Téléphone", "Dette (Crédit)", "Total Achats", "Actions"])
+        self.table.setHorizontalHeaderLabels(_("table_headers_customers"))
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.setAlternatingRowColors(True)
@@ -309,17 +363,61 @@ class CustomersPage(QWidget):
         
         self.setLayout(layout)
         
-    def load_customers(self):
-        search = self.search_input.text()
-        filter_mode = self.filter_combo.currentText()
+    def update_ui_text(self):
+        """Mettre à jour les textes de l'interface"""
+        _ = i18n_manager.get
+        is_rtl = i18n_manager.is_rtl()
         
-        if filter_mode == "Avec dettes (Crédit > 0)":
+        self.setLayoutDirection(Qt.RightToLeft if is_rtl else Qt.LeftToRight)
+        
+        self.header.setText(_("customers_title"))
+        self.subtitle.setText(_("customers_subtitle"))
+        self.search_input.setPlaceholderText(_("placeholder_search_customer"))
+        
+        # Update filter combo items while preserving selection
+        current_idx = self.filter_combo.currentIndex()
+        self.filter_combo.setItemText(0, _("filter_all_customers"))
+        self.filter_combo.setItemText(1, _("filter_with_debt"))
+        self.filter_combo.setItemText(2, _("filter_best_customers"))
+        self.filter_combo.setCurrentIndex(current_idx)
+        
+        self.new_btn.setText(_("btn_new_customer"))
+        self.table.setHorizontalHeaderLabels(_("table_headers_customers"))
+        
+        # Update action button tooltips in existing table rows
+        for row in range(self.table.rowCount()):
+            # Update button tooltips without reloading entire table
+            btn_widget = self.table.cellWidget(row, 5) # Actions are in column 5
+            if btn_widget and hasattr(btn_widget, 'layout'):
+                layout = btn_widget.layout()
+                if layout and layout.count() >= 4: # There are 4 buttons: edit, pay, delete, history
+                    edit_btn = layout.itemAt(0).widget()
+                    pay_btn = layout.itemAt(1).widget()
+                    delete_btn = layout.itemAt(2).widget()
+                    hist_btn = layout.itemAt(3).widget() # History button
+
+                    if edit_btn:
+                        edit_btn.setToolTip(_("tooltip_edit"))
+                    if pay_btn:
+                        pay_btn.setToolTip(_("tooltip_pay_debt"))
+                    if delete_btn:
+                        delete_btn.setToolTip(_("tooltip_delete"))
+                    if hist_btn:
+                        hist_btn.setToolTip(_("tooltip_history"))
+        
+    def load_customers(self):
+        _ = i18n_manager.get
+        search = self.search_input.text()
+        # Use index instead of text for filter logic to be language independent
+        filter_idx = self.filter_combo.currentIndex()
+        
+        if filter_idx == 1: # With debt
             customers = customer_manager.get_customers_with_credit()
         else:
             customers = customer_manager.search_customers(search) if search else customer_manager.get_all_customers()
             
-        # Tri pour "Meilleurs clients"
-        if filter_mode == "Meilleurs clients":
+        # Tri pour "Meilleurs clients" (Index 2)
+        if filter_idx == 2:
             customers.sort(key=lambda x: x['total_purchases'], reverse=True)
             
         self.table.setRowCount(0)
@@ -353,23 +451,29 @@ class CustomersPage(QWidget):
             hbox = QHBoxLayout(widget)
             hbox.setContentsMargins(0, 0, 0, 0)
             
-            edit_btn = QPushButton("✏️")
-            edit_btn.setToolTip("Modifier")
+            edit_btn = QPushButton(_("btn_edit"))
+            edit_btn.setToolTip(_("tooltip_edit"))
             edit_btn.clicked.connect(lambda checked, x=c: self.open_edit_dialog(x))
             hbox.addWidget(edit_btn)
             
-            pay_btn = QPushButton("💰")
-            pay_btn.setToolTip("Régler Dette")
+            pay_btn = QPushButton(_("btn_pay_debt"))
+            pay_btn.setToolTip(_("tooltip_pay_debt"))
             pay_btn.setStyleSheet("color: green;")
             pay_btn.clicked.connect(lambda checked, x=c: self.open_payment_dialog(x))
             hbox.addWidget(pay_btn)
             
             # Delete button
-            del_btn = QPushButton("🗑️")
-            del_btn.setToolTip("Supprimer")
+            del_btn = QPushButton(_("btn_delete"))
+            del_btn.setToolTip(_("tooltip_delete"))
             del_btn.setStyleSheet("color: red;")
             del_btn.clicked.connect(lambda checked, x=c['id']: self.delete_customer(x))
             hbox.addWidget(del_btn)
+            
+            # History button
+            hist_btn = QPushButton(_("btn_history"))
+            hist_btn.setToolTip(_("tooltip_history"))
+            hist_btn.clicked.connect(lambda checked, x=c['full_name']: self.open_history(x))
+            hbox.addWidget(hist_btn)
                 
             self.table.setCellWidget(row, 5, widget)
             
@@ -387,8 +491,9 @@ class CustomersPage(QWidget):
 
     def delete_customer(self, customer_id):
         """Supprimer un client"""
-        confirm = QMessageBox.question(self, "Confirmer", 
-                                     "Voulez-vous vraiment supprimer ce client ?", 
+        _ = i18n_manager.get
+        confirm = QMessageBox.question(self, _("confirm_delete_customer_title"), 
+                                     _("confirm_delete_customer_msg"), 
                                      QMessageBox.Yes | QMessageBox.No)
         
         if confirm == QMessageBox.Yes:
@@ -396,7 +501,11 @@ class CustomersPage(QWidget):
             if success:
                 self.load_customers()
             else:
-                QMessageBox.warning(self, "Impossible de supprimer", msg)
+                QMessageBox.warning(self, _("msg_delete_error"), msg)
+
+    def open_history(self, customer_name):
+        """Naviguer vers l'historique filtré"""
+        self.navigate_to.emit("history", {"filter_customer": customer_name})
 
     def refresh(self):
         """Rafraîchir les données"""

@@ -16,6 +16,8 @@ class POSManager:
     
     def __init__(self):
         self.current_cart = Cart()
+        self.held_carts = []  # List of held carts: [{id, cart, customer_name, timestamp}]
+        self.held_cart_counter = 0
         self.register_number = 1  # Numéro de caisse
     
     def set_register_number(self, register_number: int):
@@ -29,6 +31,82 @@ class POSManager:
     def new_sale(self):
         """Démarrer une nouvelle vente (réinitialiser le panier)"""
         self.current_cart = Cart()
+    
+    def hold_cart(self, customer_name: str = "") -> tuple[bool, str]:
+        """
+        Mettre le panier en attente (hold)
+        
+        Args:
+            customer_name: Nom du client (optionnel)
+            
+        Returns:
+            (success, message)
+        """
+        if self.current_cart.is_empty():
+            return False, "Le panier est vide"
+        
+        self.held_cart_counter += 1
+        held_cart = {
+            'id': self.held_cart_counter,
+            'cart': self.current_cart,
+            'customer_name': customer_name or f"Client #{self.held_cart_counter}",
+            'timestamp': datetime.now(),
+            'total': self.current_cart.get_total(),
+            'item_count': self.current_cart.get_item_count()
+        }
+        self.held_carts.append(held_cart)
+        
+        # Start a new cart
+        self.current_cart = Cart()
+        
+        logger.info(f"Panier mis en attente: #{held_cart['id']}")
+        return True, f"Panier #{held_cart['id']} mis en attente"
+    
+    def get_held_carts(self) -> list:
+        """Obtenir la liste des paniers en attente"""
+        return self.held_carts
+    
+    def retrieve_cart(self, held_cart_id: int) -> tuple[bool, str]:
+        """
+        Récupérer un panier en attente
+        
+        Args:
+            held_cart_id: ID du panier en attente
+            
+        Returns:
+            (success, message)
+        """
+        # Check if current cart has items
+        if not self.current_cart.is_empty():
+            # Put current cart on hold first
+            self.held_cart_counter += 1
+            held_current = {
+                'id': self.held_cart_counter,
+                'cart': self.current_cart,
+                'customer_name': f"Client #{self.held_cart_counter}",
+                'timestamp': datetime.now(),
+                'total': self.current_cart.get_total(),
+                'item_count': self.current_cart.get_item_count()
+            }
+            self.held_carts.append(held_current)
+        
+        # Find and retrieve the requested cart
+        for i, held in enumerate(self.held_carts):
+            if held['id'] == held_cart_id:
+                self.current_cart = held['cart']
+                self.held_carts.pop(i)
+                logger.info(f"Panier récupéré: #{held_cart_id}")
+                return True, f"Panier #{held_cart_id} récupéré"
+        
+        return False, "Panier en attente introuvable"
+    
+    def delete_held_cart(self, held_cart_id: int) -> tuple[bool, str]:
+        """Supprimer un panier en attente"""
+        for i, held in enumerate(self.held_carts):
+            if held['id'] == held_cart_id:
+                self.held_carts.pop(i)
+                return True, "Panier supprimé"
+        return False, "Panier introuvable"
     
     def add_product_by_barcode(self, barcode: str, quantity: float = 1.0) -> tuple[bool, str]:
         """
@@ -80,14 +158,16 @@ class POSManager:
             (success, message)
         """
         if product_id <= 0:
-            # Produit temporaire / divers
+            # Produit temporaire / divers - utiliser un ID unique négatif
+            import time
+            unique_id = -int(time.time() * 1000) % 1000000  # Unique negative ID
             product = {
-                'id': product_id,
+                'id': unique_id,
                 'name': product_name or "Produit Divers",
                 'selling_price': custom_price or 0,
                 'purchase_price': 0,  # Pas de coût d'achat pour produit divers
                 'barcode': '',
-                'stock_quantity': 999
+                'stock_quantity': 999999  # Unlimited stock for misc items
             }
         else:
             product = product_manager.get_product(product_id)
@@ -196,9 +276,9 @@ class POSManager:
         """Récupérer détails d'une vente pour reçu"""
         try:
             query = """
-                SELECT s.*, u.username as cashier_name, c.full_name as customer_name
+                SELECT s.*, u.full_name as cashier_name, c.full_name as customer_name
                 FROM sales s
-                LEFT JOIN users u ON s.user_id = u.id
+                LEFT JOIN users u ON s.cashier_id = u.id
                 LEFT JOIN customers c ON s.customer_id = c.id
                 WHERE s.id = ?
             """
@@ -219,6 +299,18 @@ class POSManager:
             return result
         except Exception as e:
             logger.error(f"Erreur get_sale: {e}")
+            return None
+
+    def get_sale_by_number(self, sale_number: str) -> Optional[Dict]:
+        """Récupérer détails d'une vente par son numéro de ticket"""
+        try:
+            query = "SELECT id FROM sales WHERE sale_number = ?"
+            res = db.fetch_one(query, (sale_number,))
+            if res:
+                return self.get_sale(res['id'])
+            return None
+        except Exception as e:
+            logger.error(f"Erreur get_sale_by_number: {e}")
             return None
 
 

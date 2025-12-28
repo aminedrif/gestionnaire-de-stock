@@ -13,6 +13,7 @@ from modules.products.product_manager import product_manager
 from modules.suppliers.supplier_manager import supplier_manager
 from modules.reports.reorder_report import generate_reorder_report
 from core.logger import logger
+from core.i18n import i18n_manager
 
 class ProductFormDialog(QDialog):
     """Dialogue d'ajout/modification de produit"""
@@ -20,12 +21,14 @@ class ProductFormDialog(QDialog):
     def __init__(self, product=None, parent=None):
         super().__init__(parent)
         self.product = product
-        self.setWindowTitle("Nouveau Produit" if not product else "Modifier Produit")
+        _ = i18n_manager.get
+        self.setWindowTitle(_("product_dialog_new") if not product else _("product_dialog_edit"))
         self.setMinimumWidth(500)
         self.suppliers = supplier_manager.get_all_suppliers()
         self.setup_ui()
         
     def setup_ui(self):
+        _ = i18n_manager.get
         layout = QVBoxLayout()
         
         # Onglets pour organiser les informations
@@ -40,21 +43,21 @@ class ProductFormDialog(QDialog):
         self.name_ar_edit = QLineEdit()
         self.category_combo = QComboBox() # TODO: Charger les catégories
         self.supplier_combo = QComboBox()
-        self.supplier_combo.addItem("--- Aucun ---", None)
+        self.supplier_combo.addItem(_("combo_no_supplier"), None)
         for s in self.suppliers:
             self.supplier_combo.addItem(s['company_name'], s['id'])
             
         self.description_edit = QLineEdit()
         
-        form_layout.addRow("Code-barres:", self.barcode_edit)
-        form_layout.addRow("Nom *:", self.name_edit)
-        form_layout.addRow("Nom (Arabe):", self.name_ar_edit)
-        form_layout.addRow("Fournisseur:", self.supplier_combo)
-        form_layout.addRow("Description:", self.description_edit)
+        form_layout.addRow(_("label_barcode"), self.barcode_edit)
+        form_layout.addRow(_("label_fullname"), self.name_edit)
+        form_layout.addRow(_("label_name_ar"), self.name_ar_edit)
+        form_layout.addRow(_("label_supplier"), self.supplier_combo)
+        form_layout.addRow(_("label_description"), self.description_edit)
         # form_layout.addRow("Catégorie:", self.category_combo)
         
         general_tab.setLayout(form_layout)
-        tabs.addTab(general_tab, "Général")
+        tabs.addTab(general_tab, _("tab_general"))
         
         # Onglet Prix & Stock
         price_tab = QWidget()
@@ -80,30 +83,30 @@ class ProductFormDialog(QDialog):
         self.expiry_date_edit = QDateEdit()
         self.expiry_date_edit.setCalendarPopup(True)
         self.expiry_date_edit.setDate(QDate.currentDate().addYears(1))
-        self.enable_expiry = QCheckBox("Date d'expiration ?")
+        self.enable_expiry = QCheckBox(_("checkbox_expiry_date"))
         self.enable_expiry.toggled.connect(self.expiry_date_edit.setEnabled)
         self.expiry_date_edit.setEnabled(False)
         
-        price_layout.addRow("Prix d'achat:", self.purchase_price_spin)
-        price_layout.addRow("Prix de vente *:", self.selling_price_spin)
-        price_layout.addRow("Stock initial:", self.stock_spin)
-        price_layout.addRow("Alert Stock Min:", self.min_stock_spin)
+        price_layout.addRow(_("label_purchase_price"), self.purchase_price_spin)
+        price_layout.addRow(_("label_selling_price"), self.selling_price_spin)
+        price_layout.addRow(_("label_initial_stock"), self.stock_spin)
+        price_layout.addRow(_("label_min_stock"), self.min_stock_spin)
         price_layout.addRow(self.enable_expiry, self.expiry_date_edit)
         
         price_tab.setLayout(price_layout)
-        tabs.addTab(price_tab, "Prix & Stock")
+        tabs.addTab(price_tab, _("tab_price_stock"))
         
         layout.addWidget(tabs)
         
         # Boutons
         buttons_layout = QHBoxLayout()
-        save_btn = QPushButton("💾 Enregistrer")
+        save_btn = QPushButton(_("btn_save"))
         save_btn.setDefault(True)
         save_btn.setAutoDefault(True)
         save_btn.clicked.connect(self.save)
         save_btn.setStyleSheet("background-color: #2ecc71; color: white;")
         
-        cancel_btn = QPushButton("Annuler")
+        cancel_btn = QPushButton(_("btn_cancel"))
         cancel_btn.clicked.connect(self.reject)
         
         buttons_layout.addWidget(cancel_btn)
@@ -135,8 +138,9 @@ class ProductFormDialog(QDialog):
                 self.expiry_date_edit.setDate(QDate.fromString(self.product['expiry_date'], "yyyy-MM-dd"))
                 
     def save(self):
+        _ = i18n_manager.get
         if not self.name_edit.text() or self.selling_price_spin.value() <= 0:
-            QMessageBox.warning(self, "Erreur", "Le nom et le prix de vente sont obligatoires.")
+            QMessageBox.warning(self, _("title_error"), _("msg_name_price_required"))
             return
 
         data = {
@@ -160,7 +164,8 @@ class ProductFormDialog(QDialog):
         if success:
             self.accept()
         else:
-            QMessageBox.critical(self, "Erreur", msg)
+            _ = i18n_manager.get
+            QMessageBox.critical(self, _("title_error"), msg)
 
 class ProductsPage(QWidget):
     """Page de gestion des produits"""
@@ -170,7 +175,11 @@ class ProductsPage(QWidget):
         self.init_ui()
         self.load_products()
         
+        i18n_manager.language_changed.connect(self.update_ui_text)
+        self.update_ui_text()
+        
     def init_ui(self):
+        _ = i18n_manager.get
         layout = QVBoxLayout()
         layout.setSpacing(15)
         
@@ -188,19 +197,19 @@ class ProductsPage(QWidget):
         header_layout = QHBoxLayout(header_frame)
         
         title_layout = QVBoxLayout()
-        header = QLabel("📦 Gestion des Produits")
-        header.setStyleSheet("font-size: 24px; font-weight: bold; color: white; background: transparent;")
-        title_layout.addWidget(header)
+        self.header = QLabel(_("products_title"))
+        self.header.setStyleSheet("font-size: 24px; font-weight: bold; color: white; background: transparent;")
+        title_layout.addWidget(self.header)
         
-        subtitle = QLabel("Gérez votre stock, prix et promotions")
-        subtitle.setStyleSheet("font-size: 14px; color: rgba(255,255,255,0.9); background: transparent;")
-        title_layout.addWidget(subtitle)
+        self.subtitle = QLabel(_("products_subtitle"))
+        self.subtitle.setStyleSheet("font-size: 14px; color: rgba(255,255,255,0.9); background: transparent;")
+        title_layout.addWidget(self.subtitle)
         
         header_layout.addLayout(title_layout)
         header_layout.addStretch()
         
         # Stat rapide dans le header
-        self.count_label = QLabel("0 Produits")
+        self.count_label = QLabel(_("products_count").format(0))
         self.count_label.setStyleSheet("""
             background-color: rgba(255,255,255,0.2);
             color: white;
@@ -218,7 +227,7 @@ class ProductsPage(QWidget):
         
         # Recherche - Plus grande
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("🔍 Rechercher (Nom, Code-barres)...")
+        self.search_input.setPlaceholderText(_("placeholder_search_product_page"))
         self.search_input.setMinimumHeight(50)
         self.search_input.setStyleSheet("""
             QLineEdit {
@@ -241,7 +250,12 @@ class ProductsPage(QWidget):
         self.filter_combo = QComboBox()
         self.filter_combo.setMinimumHeight(50)
         self.filter_combo.setMinimumWidth(180)
-        self.filter_combo.addItems(["Tous les produits", "Stock faible", "En promotion", "Expire bientôt"])
+        self.filter_combo.addItems([
+            _("filter_all_products"),
+            _("filter_low_stock"),
+            _("filter_promo"),
+            _("filter_expiring")
+        ])
         self.filter_combo.setStyleSheet("""
             QComboBox {
                 border: 2px solid #e5e7eb;
@@ -259,10 +273,10 @@ class ProductsPage(QWidget):
         toolbar.addWidget(self.filter_combo)
         
         # Bouton Nouveau - Plus grand
-        new_btn = QPushButton("➕ Nouveau Produit")
-        new_btn.setMinimumHeight(50)
-        new_btn.setCursor(Qt.PointingHandCursor)
-        new_btn.setStyleSheet("""
+        self.new_btn = QPushButton(_("btn_new_product"))
+        self.new_btn.setMinimumHeight(50)
+        self.new_btn.setCursor(Qt.PointingHandCursor)
+        self.new_btn.setStyleSheet("""
             QPushButton {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
                     stop:0 #3b82f6, stop:1 #2563eb);
@@ -278,14 +292,14 @@ class ProductsPage(QWidget):
                     stop:0 #2563eb, stop:1 #1d4ed8);
             }
         """)
-        new_btn.clicked.connect(self.open_new_product_dialog)
-        toolbar.addWidget(new_btn)
+        self.new_btn.clicked.connect(self.open_new_product_dialog)
+        toolbar.addWidget(self.new_btn)
         
         # Bouton Importer - Plus grand
-        import_btn = QPushButton("📥 Importer")
-        import_btn.setMinimumHeight(50)
-        import_btn.setCursor(Qt.PointingHandCursor)
-        import_btn.setStyleSheet("""
+        self.import_btn = QPushButton(_("btn_import"))
+        self.import_btn.setMinimumHeight(50)
+        self.import_btn.setCursor(Qt.PointingHandCursor)
+        self.import_btn.setStyleSheet("""
             QPushButton {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
                     stop:0 #8b5cf6, stop:1 #7c3aed);
@@ -301,15 +315,15 @@ class ProductsPage(QWidget):
                     stop:0 #7c3aed, stop:1 #6d28d9);
             }
         """)
-        import_btn.clicked.connect(self.open_import_dialog)
-        toolbar.addWidget(import_btn)
+        self.import_btn.clicked.connect(self.open_import_dialog)
+        toolbar.addWidget(self.import_btn)
 
         # Bouton Commande Fournisseur - Nouveau
-        order_btn = QPushButton("📑 Commande")
-        order_btn.setMinimumHeight(50)
-        order_btn.setCursor(Qt.PointingHandCursor)
-        order_btn.setToolTip("Générer une liste de commande pour le stock faible")
-        order_btn.setStyleSheet("""
+        self.order_btn = QPushButton(_("btn_order_report"))
+        self.order_btn.setMinimumHeight(50)
+        self.order_btn.setCursor(Qt.PointingHandCursor)
+        self.order_btn.setToolTip(_("tooltip_order_report"))
+        self.order_btn.setStyleSheet("""
             QPushButton {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
                     stop:0 #f59e0b, stop:1 #d97706);
@@ -325,15 +339,15 @@ class ProductsPage(QWidget):
                     stop:0 #d97706, stop:1 #b45309);
             }
         """)
-        order_btn.clicked.connect(self.generate_order_report)
-        toolbar.addWidget(order_btn)
+        self.order_btn.clicked.connect(self.generate_order_report)
+        toolbar.addWidget(self.order_btn)
         
         layout.addLayout(toolbar)
         
         # Tableau - Style amélioré
         self.table = QTableWidget()
         self.table.setColumnCount(7)
-        self.table.setHorizontalHeaderLabels(["Code", "Nom", "Prix Vente", "Stock", "Expiration", "Promotion", "Actions"])
+        self.table.setHorizontalHeaderLabels(_("table_headers_products_page"))
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -375,19 +389,55 @@ class ProductsPage(QWidget):
         
         self.setLayout(layout)
         
+    def update_ui_text(self):
+        """Mettre à jour les textes de l'interface"""
+        _ = i18n_manager.get
+        is_rtl = i18n_manager.is_rtl()
+        
+        self.setLayoutDirection(Qt.RightToLeft if is_rtl else Qt.LeftToRight)
+        
+        self.header.setText(_("products_title"))
+        self.subtitle.setText(_("products_subtitle"))
+        self.search_input.setPlaceholderText(_("placeholder_search_product_page"))
+        
+        # Update filter combo items
+        current_idx = self.filter_combo.currentIndex()
+        self.filter_combo.setItemText(0, _("filter_all_products"))
+        self.filter_combo.setItemText(1, _("filter_low_stock"))
+        self.filter_combo.setItemText(2, _("filter_promo"))
+        self.filter_combo.setItemText(3, _("filter_expiring"))
+        self.filter_combo.setCurrentIndex(current_idx)
+        
+        self.new_btn.setText(_("btn_new_product"))
+        self.import_btn.setText(_("btn_import"))
+        self.order_btn.setText(_("btn_order_report"))
+        self.order_btn.setToolTip(_("tooltip_order_report"))
+        
+        # Update table headers
+        headers = _("table_headers_products_page")
+        self.table.setHorizontalHeaderLabels(headers)
+        
+        # Update count label if visible
+        if hasattr(self, 'count_label') and self.count_label:
+            count = self.table.rowCount()
+            self.count_label.setText(_("products_count").format(count))
+        
     def load_products(self):
+        _ = i18n_manager.get
         search = self.search_input.text()
-        filter_mode = self.filter_combo.currentText()
+        filter_idx = self.filter_combo.currentIndex()
         
         products = []
-        if filter_mode == "Stock faible":
+        if filter_idx == 1: # Low Stock
             products = product_manager.get_low_stock_products()
-        elif filter_mode == "En promotion":
+        elif filter_idx == 2: # Promo
             products = product_manager.get_promoted_products()
-        elif filter_mode == "Expire bientôt":
+        elif filter_idx == 3: # Expiring
             products = product_manager.get_expiring_products()
         else:
             products = product_manager.search_products(search) if search else product_manager.get_all_products(limit=100)
+            
+        self.count_label.setText(_("products_count").format(len(products)))
             
         self.table.setRowCount(0)
         for p in products:
@@ -432,7 +482,7 @@ class ProductsPage(QWidget):
             # Bouton imprimer code-barres
             print_btn = QPushButton("🏷️")
             print_btn.setFixedSize(30, 30)
-            print_btn.setToolTip("Imprimer le code-barres")
+            print_btn.setToolTip(_("tooltip_print_barcode"))
             print_btn.clicked.connect(lambda checked, x=p: self.print_barcode(x))
             
             action_layout.addWidget(edit_btn)
@@ -457,7 +507,8 @@ class ProductsPage(QWidget):
             self.load_products()
             
     def delete_product(self, product_id):
-        confirm = QMessageBox.question(self, "Confirmer", "Supprimer ce produit ?", QMessageBox.Yes | QMessageBox.No)
+        _ = i18n_manager.get
+        confirm = QMessageBox.question(self, _("confirm_delete_customer_title"), _("msg_confirm_delete_product"), QMessageBox.Yes | QMessageBox.No)
         if confirm == QMessageBox.Yes:
             product_manager.delete_product(product_id)
             self.load_products()
@@ -477,7 +528,8 @@ class ProductsPage(QWidget):
             price = product.get('selling_price', 0)
             
             if not barcode_value:
-                QMessageBox.warning(self, "Erreur", "Ce produit n'a pas de code-barres")
+                _ = i18n_manager.get
+                QMessageBox.warning(self, _("title_error"), _("msg_no_barcode"))
                 return
             
             # Créer le dossier si nécessaire
@@ -522,11 +574,13 @@ class ProductsPage(QWidget):
             logger.info(f"Code-barres généré: {filename}")
             
         except ImportError:
-            QMessageBox.warning(self, "Module manquant", 
-                "Le module 'reportlab' est requis pour l'impression des codes-barres.\n\nInstallez-le avec: pip install reportlab")
+            _ = i18n_manager.get
+            QMessageBox.warning(self, _("title_missing_module"), 
+                _("msg_reportlab_missing"))
         except Exception as e:
             logger.error(f"Erreur génération code-barres: {e}")
-            QMessageBox.critical(self, "Erreur", f"Impossible de générer le code-barres: {e}")
+            _ = i18n_manager.get
+            QMessageBox.critical(self, _("title_error"), f"Impossible de générer le code-barres: {e}")
 
     def show_context_menu(self, pos):
         menu = QMenu(self)

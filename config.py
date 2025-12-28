@@ -126,6 +126,7 @@ PERMISSIONS = {
         "view_products",
         "view_customers",
         "view_suppliers",
+        "override_credit_limit",  # Allow exceeding customer credit limit
     ],
     "cashier": [
         "make_sales",

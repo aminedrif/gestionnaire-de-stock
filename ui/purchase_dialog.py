@@ -4,6 +4,7 @@ Dialogue pour ajouter un achat chez un fournisseur
 """
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QFormLayout, QLabel, 
                              QPushButton, QDoubleSpinBox, QLineEdit, QMessageBox)
+from core.i18n import i18n_manager
 from PyQt5.QtCore import Qt
 
 class PurchaseDialog(QDialog):
@@ -13,14 +14,16 @@ class PurchaseDialog(QDialog):
         self.supplier = supplier
         self.supplier_manager = supplier_manager
         self.auth_manager = auth_manager
-        self.setWindowTitle(f"Ajouter Achat: {supplier['company_name']}")
+        _ = i18n_manager.get
+        self.setWindowTitle(_("purchase_dialog_title").format(supplier['company_name']))
         self.setMinimumWidth(400)
         self.setup_ui()
         
     def setup_ui(self):
+        _ = i18n_manager.get
         layout = QVBoxLayout()
         
-        info = QLabel(f"Fournisseur: {self.supplier['company_name']}")
+        info = QLabel(_("label_supplier_info").format(self.supplier['company_name']))
         info.setStyleSheet("font-size: 16px; font-weight: bold; color: #3498db;")
         layout.addWidget(info)
         
@@ -39,30 +42,30 @@ class PurchaseDialog(QDialog):
         self.debt_spin.setDecimals(2)
         
         self.notes_edit = QLineEdit()
-        self.notes_edit.setPlaceholderText("Description de l'achat...")
+        self.notes_edit.setPlaceholderText(_("placeholder_purchase_note"))
         
-        form.addRow("Montant total de l'achat:", self.amount_spin)
-        form.addRow("Dette à ajouter:", self.debt_spin)
-        form.addRow("Description:", self.notes_edit)
+        form.addRow(_("label_purchase_amount"), self.amount_spin)
+        form.addRow(_("label_debt_to_add"), self.debt_spin)
+        form.addRow(_("label_payment_note"), self.notes_edit)
         
         layout.addLayout(form)
         
         # Info
-        info_label = QLabel("💡 Le montant total sera ajouté aux achats totaux.\nLa dette sera ajoutée à la dette actuelle.")
+        info_label = QLabel(_("info_purchase_msg"))
         info_label.setStyleSheet("color: gray; font-size: 12px;")
         info_label.setWordWrap(True)
         layout.addWidget(info_label)
         
         # Boutons
         btn_layout = QVBoxLayout()
-        save_btn = QPushButton("✅ Enregistrer l'Achat")
+        save_btn = QPushButton(_("btn_save_purchase"))
         save_btn.setDefault(True)
         save_btn.setAutoDefault(True)
         save_btn.clicked.connect(self.save)
         save_btn.setStyleSheet("background-color: #3498db; color: white; padding: 10px; font-weight: bold;")
         btn_layout.addWidget(save_btn)
         
-        cancel_btn = QPushButton("Annuler")
+        cancel_btn = QPushButton(_("btn_cancel"))
         cancel_btn.clicked.connect(self.reject)
         btn_layout.addWidget(cancel_btn)
         
@@ -73,8 +76,11 @@ class PurchaseDialog(QDialog):
         amount = self.amount_spin.value()
         debt = self.debt_spin.value()
         
+        debt = self.debt_spin.value()
+        _ = i18n_manager.get
+        
         if amount <= 0:
-            QMessageBox.warning(self, "Erreur", "Le montant doit être supérieur à 0")
+            QMessageBox.warning(self, _("title_error"), _("msg_amount_warning"))
             return
             
         user = self.auth_manager.get_current_user()
@@ -90,7 +96,7 @@ class PurchaseDialog(QDialog):
         )
         
         if success:
-            QMessageBox.information(self, "Succès", msg)
+            QMessageBox.information(self, _("title_success"), msg)
             self.accept()
         else:
-            QMessageBox.critical(self, "Erreur", msg)
+            QMessageBox.critical(self, _("title_error"), msg)

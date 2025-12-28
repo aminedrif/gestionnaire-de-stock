@@ -13,6 +13,7 @@ from modules.suppliers.supplier_manager import supplier_manager
 from core.auth import auth_manager
 from core.logger import logger
 from ui.purchase_dialog import PurchaseDialog
+from core.i18n import i18n_manager
 
 class SupplierFormDialog(QDialog):
     """Dialogue d'ajout/modification de fournisseur"""
@@ -20,11 +21,13 @@ class SupplierFormDialog(QDialog):
     def __init__(self, supplier=None, parent=None):
         super().__init__(parent)
         self.supplier = supplier
-        self.setWindowTitle("Nouveau Fournisseur" if not supplier else "Modifier Fournisseur")
+        _ = i18n_manager.get
+        self.setWindowTitle(_("supplier_dialog_new") if not supplier else _("supplier_dialog_edit"))
         self.setMinimumWidth(400)
         self.setup_ui()
         
     def setup_ui(self):
+        _ = i18n_manager.get
         layout = QFormLayout()
         
         self.company_name_edit = QLineEdit()
@@ -33,19 +36,19 @@ class SupplierFormDialog(QDialog):
         self.email_edit = QLineEdit()
         self.address_edit = QLineEdit()
         
-        layout.addRow("Entreprise *:", self.company_name_edit)
-        layout.addRow("Contact:", self.contact_person_edit)
-        layout.addRow("Téléphone:", self.phone_edit)
-        layout.addRow("Email:", self.email_edit)
-        layout.addRow("Adresse:", self.address_edit)
+        layout.addRow(_("label_company"), self.company_name_edit)
+        layout.addRow(_("label_contact"), self.contact_person_edit)
+        layout.addRow(_("label_phone"), self.phone_edit)
+        layout.addRow(_("label_email"), self.email_edit)
+        layout.addRow(_("label_address"), self.address_edit)
         
         # Boutons
         btn_layout = QHBoxLayout()
-        save_btn = QPushButton("Enregistrer")
+        save_btn = QPushButton(_("btn_save"))
         save_btn.setDefault(True)
         save_btn.setAutoDefault(True)
         save_btn.clicked.connect(self.save)
-        cancel_btn = QPushButton("Annuler")
+        cancel_btn = QPushButton(_("btn_cancel"))
         cancel_btn.clicked.connect(self.reject)
         
         btn_layout.addWidget(cancel_btn)
@@ -62,8 +65,9 @@ class SupplierFormDialog(QDialog):
             self.address_edit.setText(self.supplier.get('address', ''))
             
     def save(self):
+        _ = i18n_manager.get
         if not self.company_name_edit.text():
-            QMessageBox.warning(self, "Erreur", "Le nom de l'entreprise est obligatoire.")
+            QMessageBox.warning(self, _("title_error"), _("msg_company_required"))
             return
             
         data = {
@@ -82,7 +86,8 @@ class SupplierFormDialog(QDialog):
         if success:
             self.accept()
         else:
-            QMessageBox.critical(self, "Erreur", msg)
+            _ = i18n_manager.get
+            QMessageBox.critical(self, _("title_error"), msg)
 
 class DebtPaymentDialog(QDialog):
     """Dialogue de paiement de dette fournisseur"""
@@ -95,13 +100,15 @@ class DebtPaymentDialog(QDialog):
         except (ValueError, TypeError):
              self.supplier['total_debt'] = 0.0
 
-        self.setWindowTitle(f"Règlement Dette: {supplier['company_name']}")
+        _ = i18n_manager.get
+        self.setWindowTitle(_("debt_dialog_title").format(supplier['company_name']))
         self.setup_ui()
         
     def setup_ui(self):
+        _ = i18n_manager.get
         layout = QVBoxLayout()
         
-        info = QLabel(f"Dette actuelle: {self.supplier['total_debt']:g} DA")
+        info = QLabel(_("label_current_debt").format(f"{self.supplier['total_debt']:g}"))
         info.setStyleSheet("font-size: 16px; font-weight: bold; color: #e74c3c;")
         layout.addWidget(info)
         
@@ -112,13 +119,13 @@ class DebtPaymentDialog(QDialog):
         self.amount_spin.setValue(min(1000, self.supplier['total_debt']))
         
         self.notes_edit = QLineEdit()
-        self.notes_edit.setPlaceholderText("Description du paiement...")
+        self.notes_edit.setPlaceholderText(_("placeholder_payment_note"))
         
-        form.addRow("Montant à régler:", self.amount_spin)
-        form.addRow("Description:", self.notes_edit)
+        form.addRow(_("label_payment_amount"), self.amount_spin)
+        form.addRow(_("label_payment_note"), self.notes_edit)
         layout.addLayout(form)
         
-        btn = QPushButton("Valider Paiement")
+        btn = QPushButton(_("btn_validate_payment"))
         btn.clicked.connect(self.save)
         btn.setStyleSheet("background-color: #2ecc71; color: white; padding: 10px;")
         layout.addWidget(btn)
@@ -138,10 +145,10 @@ class DebtPaymentDialog(QDialog):
         )
         
         if success:
-            QMessageBox.information(self, "Succès", msg)
+            QMessageBox.information(self, _("title_success"), msg)
             self.accept()
         else:
-            QMessageBox.critical(self, "Erreur", msg)
+            QMessageBox.critical(self, _("title_error"), msg)
 
 class SuppliersPage(QWidget):
     """Page de gestion des fournisseurs"""
@@ -151,7 +158,11 @@ class SuppliersPage(QWidget):
         self.init_ui()
         self.load_suppliers()
         
+        i18n_manager.language_changed.connect(self.update_ui_text)
+        self.update_ui_text()
+        
     def init_ui(self):
+        _ = i18n_manager.get
         layout = QVBoxLayout()
         layout.setSpacing(15)
         
@@ -169,13 +180,13 @@ class SuppliersPage(QWidget):
         header_layout = QHBoxLayout(header_frame)
         
         title_layout = QVBoxLayout()
-        header = QLabel("🏭 Gestion des Fournisseurs")
-        header.setStyleSheet("font-size: 24px; font-weight: bold; color: white; background: transparent;")
-        title_layout.addWidget(header)
+        self.header = QLabel(_("suppliers_title"))
+        self.header.setStyleSheet("font-size: 24px; font-weight: bold; color: white; background: transparent;")
+        title_layout.addWidget(self.header)
         
-        subtitle = QLabel("Gérez vos fournisseurs et vos dettes")
-        subtitle.setStyleSheet("font-size: 14px; color: rgba(255,255,255,0.9); background: transparent;")
-        title_layout.addWidget(subtitle)
+        self.subtitle = QLabel(_("suppliers_subtitle"))
+        self.subtitle.setStyleSheet("font-size: 14px; color: rgba(255,255,255,0.9); background: transparent;")
+        title_layout.addWidget(self.subtitle)
         
         header_layout.addLayout(title_layout)
         header_layout.addStretch()
@@ -186,7 +197,7 @@ class SuppliersPage(QWidget):
         toolbar.setSpacing(10)
         
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("🔍 Rechercher fournisseur...")
+        self.search_input.setPlaceholderText(_("placeholder_search_supplier"))
         self.search_input.setMinimumHeight(50)
         self.search_input.setStyleSheet("""
             QLineEdit {
@@ -208,7 +219,7 @@ class SuppliersPage(QWidget):
         self.filter_combo = QComboBox()
         self.filter_combo.setMinimumHeight(50)
         self.filter_combo.setMinimumWidth(180)
-        self.filter_combo.addItems(["Tous les fournisseurs", "Avec dettes"])
+        self.filter_combo.addItems([_("filter_all_suppliers"), _("filter_debt_suppliers")])
         self.filter_combo.setStyleSheet("""
             QComboBox {
                 border: 2px solid #e5e7eb;
@@ -225,10 +236,10 @@ class SuppliersPage(QWidget):
         self.filter_combo.currentIndexChanged.connect(self.load_suppliers)
         toolbar.addWidget(self.filter_combo)
         
-        new_btn = QPushButton("➕ Nouveau Fournisseur")
-        new_btn.setMinimumHeight(50)
-        new_btn.setCursor(Qt.PointingHandCursor)
-        new_btn.setStyleSheet("""
+        self.new_btn = QPushButton(_("btn_new_supplier"))
+        self.new_btn.setMinimumHeight(50)
+        self.new_btn.setCursor(Qt.PointingHandCursor)
+        self.new_btn.setStyleSheet("""
             QPushButton {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
                     stop:0 #f59e0b, stop:1 #d97706);
@@ -244,18 +255,15 @@ class SuppliersPage(QWidget):
                     stop:0 #d97706, stop:1 #b45309);
             }
         """)
-        new_btn.clicked.connect(self.open_new_dialog)
-        toolbar.addWidget(new_btn)
+        self.new_btn.clicked.connect(self.open_new_dialog)
+        toolbar.addWidget(self.new_btn)
         
         layout.addLayout(toolbar)
         
         # Table - Style amélioré
         self.table = QTableWidget()
         self.table.setColumnCount(7)
-        self.table.setHorizontalHeaderLabels([
-            "Code", "Entreprise", "Contact", "Téléphone", 
-            "Total Achats", "Dettes à payer", "Actions"
-        ])
+        self.table.setHorizontalHeaderLabels(_("table_headers_suppliers"))
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.setAlternatingRowColors(True)
@@ -297,10 +305,11 @@ class SuppliersPage(QWidget):
         self.setLayout(layout)
         
     def load_suppliers(self):
+        _ = i18n_manager.get
         search = self.search_input.text()
-        filter_mode = self.filter_combo.currentText()
+        filter_idx = self.filter_combo.currentIndex()
         
-        if filter_mode == "Avec dettes":
+        if filter_idx == 1: # Debt
             suppliers = supplier_manager.get_suppliers_with_debt()
         else:
             suppliers = supplier_manager.search_suppliers(search) if search else supplier_manager.get_all_suppliers()
@@ -342,27 +351,27 @@ class SuppliersPage(QWidget):
             hbox.setContentsMargins(0, 0, 0, 0)
             
             edit_btn = QPushButton("✏️")
-            edit_btn.setToolTip("Modifier")
+            edit_btn.setToolTip(_("btn_edit"))
             edit_btn.clicked.connect(lambda checked, x=s: self.open_edit_dialog(x))
             hbox.addWidget(edit_btn)
             
             # Bouton pour ajouter dette/achat
             add_purchase_btn = QPushButton("🛒")
-            add_purchase_btn.setToolTip("Ajouter Achat")
+            add_purchase_btn.setToolTip(_("btn_add_purchase"))
             add_purchase_btn.setStyleSheet("color: blue;")
             add_purchase_btn.clicked.connect(lambda checked, x=s: self.open_purchase_dialog(x))
             hbox.addWidget(add_purchase_btn)
             
             if total_debt > 0:
                 pay_btn = QPushButton("💸")
-                pay_btn.setToolTip("Régler Dette")
+                pay_btn.setToolTip(_("btn_pay_debt"))
                 pay_btn.setStyleSheet("color: green;")
                 pay_btn.clicked.connect(lambda checked, x=s: self.open_payment_dialog(x))
                 hbox.addWidget(pay_btn)
 
             # Bouton Supprimer
             del_btn = QPushButton("🗑️")
-            del_btn.setToolTip("Supprimer")
+            del_btn.setToolTip(_("btn_delete"))
             del_btn.setStyleSheet("color: red;")
             del_btn.clicked.connect(lambda checked, x=s['id']: self.delete_supplier(x))
             hbox.addWidget(del_btn)
@@ -383,8 +392,9 @@ class SuppliersPage(QWidget):
 
     def delete_supplier(self, supplier_id):
         """Supprimer un fournisseur"""
-        confirm = QMessageBox.question(self, "Confirmer", 
-                                     "Voulez-vous vraiment supprimer ce fournisseur ?\n(Impossible s'il a des produits ou des dettes)", 
+        _ = i18n_manager.get
+        confirm = QMessageBox.question(self, _("confirm_delete_customer_title"), 
+                                     _("msg_confirm_delete_supplier"), 
                                      QMessageBox.Yes | QMessageBox.No)
         
         if confirm == QMessageBox.Yes:
@@ -393,7 +403,7 @@ class SuppliersPage(QWidget):
                 # QMessageBox.information(self, "Succès", "Fournisseur supprimé avec succès")
                 self.load_suppliers()
             else:
-                QMessageBox.warning(self, "Impossible de supprimer", msg)
+                QMessageBox.warning(self, _("title_error"), msg)
     
     def open_purchase_dialog(self, supplier):
         """Ouvrir le dialogue d'ajout d'achat"""
@@ -492,4 +502,26 @@ class SuppliersPage(QWidget):
         self.table.setStyleSheet(table_style)
         if hasattr(self, 'search_input'):
             self.search_input.setStyleSheet(input_style)
+
+    def update_ui_text(self):
+        """Mettre à jour les textes"""
+        _ = i18n_manager.get
+        is_rtl = i18n_manager.is_rtl()
+        
+        self.setLayoutDirection(Qt.RightToLeft if is_rtl else Qt.LeftToRight)
+        
+        self.header.setText(_("suppliers_title"))
+        self.subtitle.setText(_("suppliers_subtitle"))
+        self.search_input.setPlaceholderText(_("placeholder_search_supplier"))
+        self.new_btn.setText(_("btn_new_supplier"))
+        
+        # Filters
+        current_idx = self.filter_combo.currentIndex()
+        self.filter_combo.setItemText(0, _("filter_all_suppliers"))
+        self.filter_combo.setItemText(1, _("filter_debt_suppliers"))
+        self.filter_combo.setCurrentIndex(current_idx)
+        
+        # Headers
+        headers = _("table_headers_suppliers")
+        self.table.setHorizontalHeaderLabels(headers)
 

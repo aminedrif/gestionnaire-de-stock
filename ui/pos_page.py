@@ -12,16 +12,23 @@ from PyQt5.QtCore import Qt, QTimer, QStringListModel
 # ... imports ...
 from modules.sales.printer import printer_manager
 
+from core.logger import logger
+from core.i18n import i18n_manager
+
 class ReceiptPreviewDialog(QDialog):
     """Dialogue d'aperçu du ticket"""
     def __init__(self, sale_data, parent=None):
         super().__init__(parent)
         self.sale_data = sale_data
-        self.setWindowTitle(f"Aperçu Ticket #{sale_data['sale_number']}")
+        _ = i18n_manager.get
+        self.setWindowTitle(_("receipt_preview_title").format(sale_data['sale_number']))
         self.setMinimumSize(400, 600)
+        # Apply RTL if needed
+        self.setLayoutDirection(Qt.RightToLeft if i18n_manager.is_rtl() else Qt.LeftToRight)
         self.setup_ui()
         
     def setup_ui(self):
+        _ = i18n_manager.get
         layout = QVBoxLayout()
         
         # Aperçu HTML
@@ -33,11 +40,11 @@ class ReceiptPreviewDialog(QDialog):
         # Boutons
         btn_layout = QHBoxLayout()
         
-        print_btn = QPushButton("🖨️ Imprimer")
+        print_btn = QPushButton(_("btn_print"))
         print_btn.setStyleSheet("background-color: #3498db; color: white; padding: 10px;")
         print_btn.clicked.connect(self.print_ticket)
         
-        close_btn = QPushButton("Fermer")
+        close_btn = QPushButton(_("btn_close"))
         close_btn.clicked.connect(self.accept)
         
         btn_layout.addWidget(print_btn)
@@ -47,32 +54,30 @@ class ReceiptPreviewDialog(QDialog):
         self.setLayout(layout)
         
     def print_ticket(self):
+        _ = i18n_manager.get
         success, msg = printer_manager.print_receipt(self.sale_data)
         if success:
-            QMessageBox.information(self, "Succès", msg)
+            QMessageBox.information(self, _("msg_success"), msg)
             self.accept()
         else:
-            QMessageBox.warning(self, "Erreur", msg)
+            QMessageBox.warning(self, _("msg_error"), msg)
+
+
 from PyQt5.QtGui import QFont, QColor, QKeySequence
 from datetime import datetime
 from modules.products.product_manager import product_manager
 from modules.sales.cart import Cart
 from modules.sales.pos import pos_manager
 from modules.customers.customer_manager import customer_manager
-from modules.sales.printer import printer_manager
 from core.auth import auth_manager
-from core.logger import logger
-
 
 class ReturnDialog(QDialog):
     """Dialogue de gestion des retours"""
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Gestion des Retours / Annulations")
-        self.setMinimumWidth(600)
-        self.setMinimumHeight(400)
         self.sale_data = None
         self.setup_ui()
+        self.update_ui_text()
         
     def setup_ui(self):
         layout = QVBoxLayout()
@@ -80,13 +85,15 @@ class ReturnDialog(QDialog):
         # Recherche Vente
         search_layout = QHBoxLayout()
         self.sale_id_input = QLineEdit()
-        self.sale_id_input.setPlaceholderText("ID Vente ou Numéro Ticket...")
-        search_btn = QPushButton("🔍 Rechercher")
-        search_btn.clicked.connect(self.search_sale)
+        self.sale_id_input_btn = QPushButton()
+        self.sale_id_input_btn.clicked.connect(self.search_sale)
         
-        search_layout.addWidget(QLabel("Vente:"))
+        # Labels created here but text set in update_ui_text
+        self.label_sale = QLabel()
+        
+        search_layout.addWidget(self.label_sale)
         search_layout.addWidget(self.sale_id_input)
-        search_layout.addWidget(search_btn)
+        search_layout.addWidget(self.sale_id_input_btn)
         layout.addLayout(search_layout)
         
         # Info Vente
@@ -97,62 +104,82 @@ class ReturnDialog(QDialog):
         # Liste articles
         self.items_table = QTableWidget()
         self.items_table.setColumnCount(5)
-        self.items_table.setHorizontalHeaderLabels(["Produit", "Qté Achetée", "Prix Unit.", "Qté Retour", "Sélection"])
+        # Headers set in update_ui_text
         self.items_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         layout.addWidget(self.items_table)
         
         # Actions
         btn_layout = QHBoxLayout()
-        cancel_sale_btn = QPushButton("🗑️ Annuler TOUTE la vente")
-        cancel_sale_btn.setStyleSheet("background-color: #e74c3c; color: white;")
-        cancel_sale_btn.clicked.connect(self.cancel_entire_sale)
+        self.cancel_sale_btn = QPushButton()
+        self.cancel_sale_btn.setStyleSheet("background-color: #e74c3c; color: white;")
+        self.cancel_sale_btn.clicked.connect(self.cancel_entire_sale)
         
-        process_return_btn = QPushButton("↩️ Retourner les articles sélectionnés")
-        process_return_btn.setStyleSheet("background-color: #f39c12; color: white;")
-        process_return_btn.clicked.connect(self.process_partial_return)
+        self.process_return_btn = QPushButton()
+        self.process_return_btn.setStyleSheet("background-color: #f39c12; color: white;")
+        self.process_return_btn.clicked.connect(self.process_partial_return)
         
-        btn_layout.addWidget(cancel_sale_btn)
+        btn_layout.addWidget(self.cancel_sale_btn)
         
-        reprint_btn = QPushButton("🖨️ Réimprimer Ticket")
-        reprint_btn.setStyleSheet("background-color: #3498db; color: white;")
-        reprint_btn.clicked.connect(self.reprint_ticket)
-        btn_layout.addWidget(reprint_btn)
+        self.reprint_btn = QPushButton()
+        self.reprint_btn.setStyleSheet("background-color: #3498db; color: white;")
+        self.reprint_btn.clicked.connect(self.reprint_ticket)
+        btn_layout.addWidget(self.reprint_btn)
         
-        btn_layout.addWidget(process_return_btn)
+        btn_layout.addWidget(self.process_return_btn)
         layout.addLayout(btn_layout)
         
         self.setLayout(layout)
+
+    def update_ui_text(self):
+        _ = i18n_manager.get
+        self.setWindowTitle(_("return_dialog_title"))
+        self.setLayoutDirection(Qt.RightToLeft if i18n_manager.is_rtl() else Qt.LeftToRight)
+        
+        self.label_sale.setText(_("label_sale"))
+        self.sale_id_input.setPlaceholderText(_("placeholder_search_sale"))
+        self.sale_id_input_btn.setText(_("btn_search"))
+        
+        headers = [
+            _("col_product"), _("col_qty_bought"), _("col_unit_price"), 
+            _("col_qty_return"), _("col_selection")
+        ]
+        self.items_table.setHorizontalHeaderLabels(headers)
+        
+        self.cancel_sale_btn.setText(_("btn_cancel_sale"))
+        self.process_return_btn.setText(_("btn_return_selected"))
+        self.reprint_btn.setText(_("btn_reprint_ticket"))
+        
+        if self.sale_data:
+            self.display_sale() # Refresh to update any formatted strings if needed
         
     def search_sale(self):
+        _ = i18n_manager.get
         term = self.sale_id_input.text().strip()
         if not term:
             return
             
-        # Essayer de trouver par ID ou Numéro
-        # Pour simplifier, on suppose que l'utilisateur entre l'ID numérique
-        # Pour une vraie recherche par numéro (VNT-...), il faudrait une méthode search_sale dans pos_manager
-        
-        # Hack temporaire: Si c'est numérique, c'est l'ID. Sinon c'est complexe sans méthode de recherche dédiée.
-        # On va utiliser pos_manager.get_sale(id) si numérique.
-        
         if term.isdigit():
             sale = pos_manager.get_sale(int(term))
         else:
-            # TODO: Implémenter get_sale_by_number dans pos_manager
-            QMessageBox.warning(self, "Info", "Recherche par numéro non implémentée, utilisez l'ID de vente (affiché dans les logs ou base)")
+            QMessageBox.warning(self, "Info", "Recherche par numéro non implémentée")
             return
             
         if sale:
             self.sale_data = sale
             self.display_sale()
         else:
-            QMessageBox.warning(self, "Erreur", "Vente introuvable")
+            QMessageBox.warning(self, _("msg_error"), _("msg_sale_not_found"))
             
     def display_sale(self):
         if not self.sale_data:
             return
-            
-        self.info_label.setText(f"Vente #{self.sale_data['sale_number']} - Total: {self.sale_data['total_amount']} DA - Date: {self.sale_data['sale_date']}")
+        
+        _ = i18n_manager.get
+        self.info_label.setText(_("label_sale_info").format(
+            self.sale_data['sale_number'], 
+            self.sale_data['total_amount'], 
+            self.sale_data['sale_date']
+        ))
         
         self.items_table.setRowCount(0)
         items = self.sale_data.get('items', [])
@@ -180,20 +207,22 @@ class ReturnDialog(QDialog):
     def cancel_entire_sale(self):
         if not self.sale_data:
             return
-            
-        confirm = QMessageBox.question(self, "Confirmer", "Annuler TOTALEMENT cette vente ? Stock sera restauré.", QMessageBox.Yes | QMessageBox.No)
+        
+        _ = i18n_manager.get
+        confirm = QMessageBox.question(self, _("confirm_cancel_sale_title"), _("confirm_cancel_sale_msg"), QMessageBox.Yes | QMessageBox.No)
         if confirm == QMessageBox.Yes:
             success, msg = pos_manager.cancel_sale(self.sale_data['id'], "Annulation utilisateur")
             if success:
-                QMessageBox.information(self, "Succès", msg)
+                QMessageBox.information(self, _("msg_success"), msg)
                 self.accept()
             else:
-                QMessageBox.critical(self, "Erreur", msg)
+                QMessageBox.critical(self, _("msg_error"), msg)
                 
     def process_partial_return(self):
         if not self.sale_data:
             return
-            
+        
+        _ = i18n_manager.get
         items_to_return = []
         rows = self.items_table.rowCount()
         original_items = self.sale_data.get('items', [])
@@ -202,14 +231,11 @@ class ReturnDialog(QDialog):
             if self.items_table.item(i, 4).checkState() == Qt.Checked:
                 qty = self.items_table.cellWidget(i, 3).value()
                 if qty > 0:
-                    # Trouver l'ID produit correspondant (supposons l'ordre conservé ou on stocke l'ID)
-                    # Mieux: stocker l'ID dans UserRole
-                    # Pour simplifier ici, on utilise l'index
                     product_id = original_items[i]['product_id']
                     items_to_return.append({'product_id': product_id, 'quantity': qty})
         
         if not items_to_return:
-            QMessageBox.warning(self, "Info", "Aucun article sélectionné ou quantité nulle")
+            QMessageBox.warning(self, "Info", _("msg_no_selection"))
             return
             
         user = auth_manager.get_current_user()
@@ -220,11 +246,11 @@ class ReturnDialog(QDialog):
         )
         
         if success:
-            QMessageBox.information(self, "Succès", msg)
+            QMessageBox.information(self, _("msg_success"), msg)
             self.accept()
         else:
-            QMessageBox.critical(self, "Erreur", msg)
-
+            QMessageBox.critical(self, _("msg_error"), msg)
+            
     def reprint_ticket(self):
         """Réimprimer le ticket de la vente affichée"""
         if not self.sale_data:
@@ -242,6 +268,68 @@ class POSPage(QWidget):
         self.current_customer = None
         self.init_ui()
         
+        # Connect to language change
+        i18n_manager.language_changed.connect(self.update_ui_text)
+        self.update_ui_text()
+        
+    def update_ui_text(self):
+        """Mettre à jour les textes de l'interface"""
+        _ = i18n_manager.get
+        is_rtl = i18n_manager.is_rtl()
+        
+        # Layout Direction
+        self.setLayoutDirection(Qt.RightToLeft if is_rtl else Qt.LeftToRight)
+        
+        # Header
+        # Note: These values (0.0) are placeholders, actual values update on cart change
+        # We might want to preserve current values if possible, but simplest is to just update format
+        # Actually, update_totals() handles the text content usually. 
+        # But we need to update the label FORMAT string used in update_totals or just rely on update_totals being called?
+        # Let's just update the static parts or trigger a global update. 
+        # For now, just setting text might reset it to 0.00 if we don't check.
+        # Better: trigger self.update_totals() if it exists? 
+        # Yes, `update_totals` exists later in the file (I need to check/verify). 
+        # If not, I'll just set the labels.
+        # Assuming update_totals will serve the right values later.
+        
+        # Left Panel
+        self.scanner_group.setTitle(_("group_scan"))
+        self.barcode_input.setPlaceholderText(_("placeholder_scan"))
+        
+        self.search_group.setTitle(_("group_search_product"))
+        self.search_input.setPlaceholderText(_("placeholder_search_product"))
+        self.products_table.setHorizontalHeaderLabels(_("table_headers_products"))
+        
+        self.calc_group.setTitle(_("group_calculator"))
+        self.calc_add_btn.setText(_("btn_add_to_cart"))
+        
+        # Right Panel
+        self.customer_group.setTitle(_("group_customer"))
+        self.customer_combo.lineEdit().setPlaceholderText(_("placeholder_customer"))
+        self.clear_customer_btn.setToolTip(_("btn_clear_cart")) # Reusing clear cart or similar "Reset"
+        
+        self.cart_label.setText(_("label_cart"))
+        self.cart_table.setHorizontalHeaderLabels(_("table_headers_cart"))
+        
+        self.payment_group.setTitle(_("group_payment"))
+        self.print_receipt_cb.setText(_("checkbox_print_ticket"))
+        
+        # Update Payment Method Items
+        current_idx = self.payment_method.currentIndex()
+        self.payment_method.setItemText(0, _("payment_cash"))
+        self.payment_method.setItemText(1, _("payment_credit"))
+        self.payment_method.setCurrentIndex(current_idx)
+        
+        self.pay_btn.setText(_("btn_pay"))
+        self.clear_btn.setText(_("btn_clear_cart"))
+        self.discount_btn.setText(_("btn_discount"))
+        self.return_btn_pos.setText(_("btn_returns"))
+        self.hold_btn.setText(_("btn_hold"))
+        self.retrieve_btn.setText(_("btn_retrieve"))
+
+        # Refresh totals display with new currency symbol if any
+        self.update_totals()
+
     def init_ui(self):
         """Initialiser l'interface"""
         layout = QHBoxLayout()
@@ -281,6 +369,8 @@ class POSPage(QWidget):
         layout = QVBoxLayout()
         layout.setSpacing(15)
         
+        _ = i18n_manager.get
+        
         # En-tête avec TOTAL et Remise (grand)
         header_frame = QFrame()
         header_frame.setStyleSheet("""
@@ -295,20 +385,20 @@ class POSPage(QWidget):
         header_layout_inner = QVBoxLayout(header_frame)
         
         # Label TOTAL (très grand)
-        self.header_total_label = QLabel("TOTAL: 0.00 DA")
+        self.header_total_label = QLabel(_("label_total").format(0.0))
         self.header_total_label.setStyleSheet("font-size: 38px; font-weight: bold; color: white; background: transparent;")
         header_layout_inner.addWidget(self.header_total_label)
         
         # Label Remise (sous le total)
-        self.header_discount_label = QLabel("Remise: 0.00 DA")
+        self.header_discount_label = QLabel(_("label_discount").format(0.0))
         self.header_discount_label.setStyleSheet("font-size: 16px; color: #fbbf24; background: transparent;")
         header_layout_inner.addWidget(self.header_discount_label)
         
         layout.addWidget(header_frame)
         
         # Scanner code-barres
-        scanner_group = QGroupBox("Scanner Code-Barres")
-        scanner_group.setStyleSheet("""
+        self.scanner_group = QGroupBox(_("group_scan"))
+        self.scanner_group.setStyleSheet("""
             QGroupBox {
                 font-size: 14px;
                 font-weight: bold;
@@ -327,7 +417,7 @@ class POSPage(QWidget):
         scanner_layout = QVBoxLayout()
         
         self.barcode_input = QLineEdit()
-        self.barcode_input.setPlaceholderText("Scanner ou entrer le code-barres...")
+        self.barcode_input.setPlaceholderText(_("placeholder_scan"))
         self.barcode_input.setMinimumHeight(50)
         self.barcode_input.setStyleSheet("""
             QLineEdit {
@@ -353,12 +443,12 @@ class POSPage(QWidget):
         self.scan_timer.timeout.connect(self.auto_scan_product)
         self.barcode_input.textChanged.connect(self.on_barcode_text_changed)
         scanner_layout.addWidget(self.barcode_input)
-        scanner_group.setLayout(scanner_layout)
-        layout.addWidget(scanner_group)
+        self.scanner_group.setLayout(scanner_layout)
+        layout.addWidget(self.scanner_group)
         
         # Recherche produit
-        search_group = QGroupBox("Recherche Produit")
-        search_group.setStyleSheet("""
+        self.search_group = QGroupBox(_("group_search_product"))
+        self.search_group.setStyleSheet("""
             QGroupBox {
                 font-size: 14px;
                 font-weight: bold;
@@ -374,7 +464,7 @@ class POSPage(QWidget):
         search_layout = QHBoxLayout()
         
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Rechercher par nom...")
+        self.search_input.setPlaceholderText(_("placeholder_search_product"))
         self.search_input.setMinimumHeight(45)
         self.search_input.setStyleSheet("""
             QLineEdit {
@@ -391,9 +481,9 @@ class POSPage(QWidget):
         self.search_input.textChanged.connect(self.search_products)
         search_layout.addWidget(self.search_input)
         
-        search_btn = QPushButton("🔍")
-        search_btn.setMinimumSize(45, 45)
-        search_btn.setStyleSheet("""
+        self.search_btn = QPushButton("🔍")
+        self.search_btn.setMinimumSize(45, 45)
+        self.search_btn.setStyleSheet("""
             QPushButton {
                 background-color: #3498db;
                 color: white;
@@ -405,16 +495,16 @@ class POSPage(QWidget):
                 background-color: #2980b9;
             }
         """)
-        search_btn.clicked.connect(self.search_products)
-        search_layout.addWidget(search_btn)
+        self.search_btn.clicked.connect(self.search_products)
+        search_layout.addWidget(self.search_btn)
         
-        search_group.setLayout(search_layout)
-        layout.addWidget(search_group)
+        self.search_group.setLayout(search_layout)
+        layout.addWidget(self.search_group)
         
         # Liste des produits trouvés
         self.products_table = QTableWidget()
         self.products_table.setColumnCount(5)
-        self.products_table.setHorizontalHeaderLabels(["Code", "Nom", "Prix", "Stock", "Action"])
+        self.products_table.setHorizontalHeaderLabels(_("table_headers_products"))
         self.products_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self.products_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.products_table.setEditTriggers(QAbstractItemView.NoEditTriggers) # Read-only
@@ -441,8 +531,8 @@ class POSPage(QWidget):
         layout.addWidget(self.products_table)
         
         # Calculatrice intégrée (Montant Libre) - EN BAS
-        calc_group = QGroupBox("🧮 Calculatrice (Montant Libre)")
-        calc_group.setStyleSheet("""
+        self.calc_group = QGroupBox(_("group_calculator"))
+        self.calc_group.setStyleSheet("""
             QGroupBox {
                 font-size: 14px;
                 font-weight: bold;
@@ -513,9 +603,9 @@ class POSPage(QWidget):
         calc_layout.addLayout(calc_grid)
         
         # Bouton Ajouter au panier
-        calc_add_btn = QPushButton("✅ AJOUTER AU PANIER")
-        calc_add_btn.setMinimumHeight(50)
-        calc_add_btn.setStyleSheet("""
+        self.calc_add_btn = QPushButton(_("btn_add_to_cart"))
+        self.calc_add_btn.setMinimumHeight(50)
+        self.calc_add_btn.setStyleSheet("""
             QPushButton {
                 background-color: #27ae60;
                 color: white;
@@ -528,11 +618,11 @@ class POSPage(QWidget):
                 background-color: #219150;
             }
         """)
-        calc_add_btn.clicked.connect(self.add_from_calculator)
-        calc_layout.addWidget(calc_add_btn)
+        self.calc_add_btn.clicked.connect(self.add_from_calculator)
+        calc_layout.addWidget(self.calc_add_btn)
         
-        calc_group.setLayout(calc_layout)
-        layout.addWidget(calc_group)
+        self.calc_group.setLayout(calc_layout)
+        layout.addWidget(self.calc_group)
         
         panel.setLayout(layout)
         return panel
@@ -552,9 +642,11 @@ class POSPage(QWidget):
         layout = QVBoxLayout()
         layout.setSpacing(15)
         
+        _ = i18n_manager.get
+        
         # Client - avec recherche clavier
-        customer_group = QGroupBox("👤 Client")
-        customer_group.setStyleSheet("""
+        self.customer_group = QGroupBox(_("group_customer"))
+        self.customer_group.setStyleSheet("""
             QGroupBox {
                 font-size: 16px;
                 font-weight: bold;
@@ -569,7 +661,7 @@ class POSPage(QWidget):
         self.customer_combo = QComboBox()
         self.customer_combo.setMinimumHeight(50)
         self.customer_combo.setEditable(True)  # Permet la recherche au clavier
-        self.customer_combo.lineEdit().setPlaceholderText("🔍 Rechercher un client (optionnel)...")
+        self.customer_combo.lineEdit().setPlaceholderText(_("placeholder_customer"))
         self.customer_combo.setInsertPolicy(QComboBox.NoInsert)
         self.load_customers()
         self.customer_combo.setCurrentIndex(-1)  # Aucune sélection = champ vide
@@ -614,17 +706,17 @@ class POSPage(QWidget):
         self.clear_customer_btn.clicked.connect(self.clear_customer_selection)
         customer_layout.addWidget(self.clear_customer_btn)
         
-        customer_group.setLayout(customer_layout)
-        layout.addWidget(customer_group)
+        self.customer_group.setLayout(customer_layout)
+        layout.addWidget(self.customer_group)
         
         # Panier
-        cart_label = QLabel("🛒 Panier")
-        cart_label.setStyleSheet("font-size: 18px; font-weight: bold; color: #8b5cf6; margin-top: 10px;")
-        layout.addWidget(cart_label)
+        self.cart_label = QLabel(_("label_cart"))
+        self.cart_label.setStyleSheet("font-size: 18px; font-weight: bold; color: #8b5cf6; margin-top: 10px;")
+        layout.addWidget(self.cart_label)
         
         self.cart_table = QTableWidget()
         self.cart_table.setColumnCount(5)
-        self.cart_table.setHorizontalHeaderLabels(["Produit", "Prix", "Qté", "Total", "❌"])
+        self.cart_table.setHorizontalHeaderLabels(_("table_headers_cart"))
         self.cart_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.cart_table.setEditTriggers(QAbstractItemView.NoEditTriggers) # Read-only
         self.cart_table.setStyleSheet("""
@@ -655,8 +747,8 @@ class POSPage(QWidget):
         # (Déplacés vers le header gauche)
         
         # Paiement
-        payment_group = QGroupBox("💳 Paiement")
-        payment_group.setStyleSheet("""
+        self.payment_group = QGroupBox(_("group_payment"))
+        self.payment_group.setStyleSheet("""
             QGroupBox {
                 font-size: 14px;
                 font-weight: bold;
@@ -669,9 +761,8 @@ class POSPage(QWidget):
         payment_layout = QVBoxLayout()
         
         self.payment_method = QComboBox()
-        self.payment_method.addItem("💵 Espèces", "cash")
-        # Carte supprimée à la demande
-        self.payment_method.addItem("📝 Crédit", "credit")
+        self.payment_method.addItem(_("payment_cash"), "cash")
+        self.payment_method.addItem(_("payment_credit"), "credit")
         self.payment_method.setMinimumHeight(40)
         self.payment_method.setStyleSheet("""
             QComboBox {
@@ -688,22 +779,22 @@ class POSPage(QWidget):
         payment_layout.addWidget(self.payment_method)
         
         # Checkbox pour imprimer le ticket
-        self.print_receipt_cb = QCheckBox("🖨️ Imprimer le ticket")
+        self.print_receipt_cb = QCheckBox(_("checkbox_print_ticket"))
         self.print_receipt_cb.setChecked(True)
         self.print_receipt_cb.setStyleSheet("font-size: 14px; padding: 5px;")
         payment_layout.addWidget(self.print_receipt_cb)
         
-        payment_group.setLayout(payment_layout)
-        layout.addWidget(payment_group)
+        self.payment_group.setLayout(payment_layout)
+        layout.addWidget(self.payment_group)
         
         # Boutons d'action - Plus gros pour écran tactile
         buttons_layout = QVBoxLayout()
         buttons_layout.setSpacing(12)
         
         # Bouton Payer - TRÈS GRAND pour écran tactile
-        pay_btn = QPushButton("💰 PAYER (F9)")
-        pay_btn.setMinimumHeight(80)
-        pay_btn.setStyleSheet("""
+        self.pay_btn = QPushButton(_("btn_pay"))
+        self.pay_btn.setMinimumHeight(80)
+        self.pay_btn.setStyleSheet("""
             QPushButton {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
                     stop:0 #10b981, stop:1 #059669);
@@ -721,16 +812,16 @@ class POSPage(QWidget):
                 background: #047857;
             }
         """)
-        pay_btn.clicked.connect(self.process_payment)
-        buttons_layout.addWidget(pay_btn)
+        self.pay_btn.clicked.connect(self.process_payment)
+        buttons_layout.addWidget(self.pay_btn)
         
         # Boutons secondaires - Plus gros
         secondary_layout = QHBoxLayout()
         secondary_layout.setSpacing(10)
         
-        clear_btn = QPushButton("🗑️ Vider")
-        clear_btn.setMinimumHeight(55)
-        clear_btn.setStyleSheet("""
+        self.clear_btn = QPushButton(_("btn_clear_cart"))
+        self.clear_btn.setMinimumHeight(55)
+        self.clear_btn.setStyleSheet("""
             QPushButton {
                 background-color: #e74c3c;
                 color: white;
@@ -743,13 +834,13 @@ class POSPage(QWidget):
                 background-color: #c0392b;
             }
         """)
-        clear_btn.clicked.connect(self.clear_cart)
-        secondary_layout.addWidget(clear_btn)
+        self.clear_btn.clicked.connect(self.clear_cart)
+        secondary_layout.addWidget(self.clear_btn)
 
         
-        discount_btn = QPushButton("🏷️ Remise")
-        discount_btn.setMinimumHeight(55)
-        discount_btn.setStyleSheet("""
+        self.discount_btn = QPushButton(_("btn_discount"))
+        self.discount_btn.setMinimumHeight(55)
+        self.discount_btn.setStyleSheet("""
             QPushButton {
                 background-color: #f39c12;
                 color: white;
@@ -762,13 +853,13 @@ class POSPage(QWidget):
                 background-color: #e67e22;
             }
         """)
-        discount_btn.clicked.connect(self.apply_discount)
-        secondary_layout.addWidget(discount_btn)
+        self.discount_btn.clicked.connect(self.apply_discount)
+        secondary_layout.addWidget(self.discount_btn)
         
         # Bouton Retour
-        return_btn = QPushButton("↩️ Retour")
-        return_btn.setMinimumHeight(55)
-        return_btn.setStyleSheet("""
+        self.return_btn_pos = QPushButton(_("btn_returns"))
+        self.return_btn_pos.setMinimumHeight(55)
+        self.return_btn_pos.setStyleSheet("""
             QPushButton {
                 background-color: #95a5a6;
                 color: white;
@@ -781,8 +872,46 @@ class POSPage(QWidget):
                 background-color: #7f8c8d;
             }
         """)
-        return_btn.clicked.connect(self.open_returns)
-        secondary_layout.addWidget(return_btn)
+        self.return_btn_pos.clicked.connect(self.open_returns)
+        secondary_layout.addWidget(self.return_btn_pos)
+        
+        # Bouton En Attente (Hold)
+        self.hold_btn = QPushButton(_("btn_hold"))
+        self.hold_btn.setMinimumHeight(55)
+        self.hold_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #9b59b6;
+                color: white;
+                border: none;
+                border-radius: 10px;
+                font-size: 16px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #8e44ad;
+            }
+        """)
+        self.hold_btn.clicked.connect(self.hold_current_cart)
+        secondary_layout.addWidget(self.hold_btn)
+        
+        # Bouton Récupérer (held carts)
+        self.retrieve_btn = QPushButton(_("btn_retrieve"))
+        self.retrieve_btn.setMinimumHeight(55)
+        self.retrieve_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3498db;
+                color: white;
+                border: none;
+                border-radius: 10px;
+                font-size: 16px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #2980b9;
+            }
+        """)
+        self.retrieve_btn.clicked.connect(self.show_held_carts)
+        secondary_layout.addWidget(self.retrieve_btn)
         
         buttons_layout.addLayout(secondary_layout)
         layout.addLayout(buttons_layout)
@@ -1068,11 +1197,13 @@ class POSPage(QWidget):
                 logger.info(f"Produit ajouté au panier: {product['name']}")
             else:
                 logger.warning(f"Échec ajout panier ({product['name']}): {message}")
-                QMessageBox.warning(self, "Impossible d'ajouter", message)
+                _ = i18n_manager.get
+                QMessageBox.warning(self, _("title_warning"), message)
                 
         except Exception as e:
             logger.error(f"Erreur ajout panier: {e}")
-            QMessageBox.critical(self, "Erreur", f"Une erreur est survenue: {e}")
+            _ = i18n_manager.get
+            QMessageBox.critical(self, _("title_error"), f"{_('system_error').format(e)}")
 
     
     def update_cart_display(self):
@@ -1105,8 +1236,9 @@ class POSPage(QWidget):
         discount = self.cart.get_discount_amount()
         total = self.cart.get_total()
         
-        self.header_discount_label.setText(f"Remise: {discount:.2f} DA")
-        self.header_total_label.setText(f"TOTAL: {total:.2f} DA")
+        _ = i18n_manager.get
+        self.header_discount_label.setText(_("label_discount").format(discount))
+        self.header_total_label.setText(_("label_total").format(total))
     
     def remove_from_cart(self, product_id):
         """Retirer un produit du panier"""
@@ -1119,9 +1251,10 @@ class POSPage(QWidget):
     
     def clear_cart(self):
         """Vider le panier"""
+        _ = i18n_manager.get
         reply = QMessageBox.question(
-            self, "Confirmation",
-            "Voulez-vous vraiment vider le panier ?",
+            self, _("msg_confirm_clear_title", "Confirmation"),
+            _("msg_confirm_clear"),
             QMessageBox.Yes | QMessageBox.No
         )
         
@@ -1131,8 +1264,9 @@ class POSPage(QWidget):
     
     def apply_discount(self):
         """Appliquer une remise"""
+        _ = i18n_manager.get
         discount, ok = QInputDialog.getDouble(
-            self, "Remise",
+            self, _("btn_discount"),
             "Montant de la remise (DA):",
             0, 0, 100000, 2
         )
@@ -1142,17 +1276,122 @@ class POSPage(QWidget):
             if success:
                 self.update_cart_display()
             else:
-                QMessageBox.warning(self, "Erreur", message)
+                QMessageBox.warning(self, _("title_error"), message)
                 
     def open_returns(self):
         """Ouvrir le dialogue de retours"""
         dialog = ReturnDialog(self)
         dialog.exec_()
     
+    def hold_current_cart(self):
+        """Mettre le panier actuel en attente"""
+        _ = i18n_manager.get
+        if self.cart.is_empty():
+            QMessageBox.warning(self, _("title_warning"), _("msg_cart_empty"))
+            return
+        
+        # Ask for customer name (optional)
+        name, ok = QInputDialog.getText(
+            self, _("btn_hold"),
+            _("msg_enter_customer_name"),
+            text=""
+        )
+        
+        if ok:
+            success, msg = pos_manager.hold_cart(name)
+            if success:
+                self.cart = pos_manager.get_cart()
+                self.update_cart_display()
+                QMessageBox.information(self, _("title_success"), msg)
+            else:
+                QMessageBox.warning(self, _("title_error"), msg)
+    
+    def show_held_carts(self):
+        """Afficher les paniers en attente"""
+        _ = i18n_manager.get
+        held_carts = pos_manager.get_held_carts()
+        
+        if not held_carts:
+            QMessageBox.information(self, _("title_info"), _("msg_no_held_carts"))
+            return
+        
+        # Create dialog to show held carts
+        dialog = QDialog(self)
+        dialog.setWindowTitle(_("title_held_carts"))
+        dialog.setMinimumWidth(500)
+        dialog.setMinimumHeight(300)
+        
+        layout = QVBoxLayout()
+        
+        # Table of held carts
+        table = QTableWidget()
+        table.setColumnCount(4)
+        table.setHorizontalHeaderLabels([_("col_id"), _("col_customer"), _("col_items"), _("col_total")])
+        table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        table.setSelectionBehavior(QTableWidget.SelectRows)
+        table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        
+        for held in held_carts:
+            row = table.rowCount()
+            table.insertRow(row)
+            table.setItem(row, 0, QTableWidgetItem(f"#{held['id']}"))
+            table.setItem(row, 1, QTableWidgetItem(held['customer_name']))
+            table.setItem(row, 2, QTableWidgetItem(str(held['item_count'])))
+            table.setItem(row, 3, QTableWidgetItem(f"{held['total']:.2f} DA"))
+        
+        layout.addWidget(table)
+        
+        # Buttons
+        btn_layout = QHBoxLayout()
+        
+        retrieve_btn = QPushButton(_("btn_retrieve_selected"))
+        retrieve_btn.setStyleSheet("background-color: #27ae60; color: white; padding: 10px;")
+        
+        delete_btn = QPushButton(_("btn_delete_selected"))
+        delete_btn.setStyleSheet("background-color: #e74c3c; color: white; padding: 10px;")
+        
+        close_btn = QPushButton(_("btn_close"))
+        close_btn.clicked.connect(dialog.close)
+        
+        def retrieve_selected():
+            row = table.currentRow()
+            if row >= 0:
+                held_id = held_carts[row]['id']
+                success, msg = pos_manager.retrieve_cart(held_id)
+                if success:
+                    self.cart = pos_manager.get_cart()
+                    self.update_cart_display()
+                    dialog.accept()
+                else:
+                    QMessageBox.warning(dialog, _("title_error"), msg)
+        
+        def delete_selected():
+            row = table.currentRow()
+            if row >= 0:
+                held_id = held_carts[row]['id']
+                success, msg = pos_manager.delete_held_cart(held_id)
+                if success:
+                    table.removeRow(row)
+                    held_carts.pop(row)
+                    if not held_carts:
+                        dialog.accept()
+        
+        retrieve_btn.clicked.connect(retrieve_selected)
+        delete_btn.clicked.connect(delete_selected)
+        
+        btn_layout.addWidget(retrieve_btn)
+        btn_layout.addWidget(delete_btn)
+        btn_layout.addWidget(close_btn)
+        
+        layout.addLayout(btn_layout)
+        dialog.setLayout(layout)
+        dialog.exec_()
+    
     def add_custom_product(self):
         """Ajouter un produit personnalisé (non référencé dans la base)"""
+        _ = i18n_manager.get
         dialog = QDialog(self)
-        dialog.setWindowTitle("➕ Ajouter un Produit Personnalisé")
+        dialog.setWindowTitle(_("custom_product_title"))
         dialog.setMinimumWidth(400)
         
         layout = QVBoxLayout()
@@ -1160,7 +1399,7 @@ class POSPage(QWidget):
         
         # Champs
         name_input = QLineEdit()
-        name_input.setPlaceholderText("Ex: Service, Réparation, Article divers...")
+        name_input.setPlaceholderText(_("placeholder_product_name"))
         name_input.setMinimumHeight(40)
         
         price_input = QDoubleSpinBox()
@@ -1175,20 +1414,20 @@ class POSPage(QWidget):
         qty_input.setValue(1)
         qty_input.setMinimumHeight(40)
         
-        form.addRow("Nom du produit:", name_input)
-        form.addRow("Prix unitaire:", price_input)
-        form.addRow("Quantité:", qty_input)
+        form.addRow(_("label_product_name"), name_input)
+        form.addRow(_("label_unit_price"), price_input)
+        form.addRow(_("label_quantity"), qty_input)
         
         layout.addLayout(form)
         
         # Boutons
         btn_layout = QHBoxLayout()
         
-        add_btn = QPushButton("✅ Ajouter au panier")
+        add_btn = QPushButton(_("btn_add_to_cart"))
         add_btn.setStyleSheet("background-color: #27ae60; color: white; padding: 12px; font-weight: bold;")
         add_btn.setMinimumHeight(50)
         
-        cancel_btn = QPushButton("Annuler")
+        cancel_btn = QPushButton(_("btn_cancel"))
         cancel_btn.setMinimumHeight(50)
         
         btn_layout.addWidget(cancel_btn)
@@ -1203,10 +1442,10 @@ class POSPage(QWidget):
             qty = qty_input.value()
             
             if not name:
-                QMessageBox.warning(dialog, "Erreur", "Veuillez entrer un nom de produit")
+                QMessageBox.warning(dialog, _("title_error"), _("msg_enter_product_name"))
                 return
             if price <= 0:
-                QMessageBox.warning(dialog, "Erreur", "Veuillez entrer un prix valide")
+                QMessageBox.warning(dialog, _("title_error"), _("msg_valid_price"))
                 return
             
             # Créer un produit temporaire (non sauvegardé en base)
@@ -1223,9 +1462,9 @@ class POSPage(QWidget):
             if success:
                 self.update_cart_display()
                 dialog.accept()
-                QMessageBox.information(self, "✅ Ajouté", f"{name} x{qty} ajouté au panier")
+                QMessageBox.information(self, _("title_success"), _("msg_added_to_cart").format(name, qty))
             else:
-                QMessageBox.warning(dialog, "Erreur", msg)
+                QMessageBox.warning(dialog, _("title_error"), msg)
         
         add_btn.clicked.connect(add_to_cart)
         cancel_btn.clicked.connect(dialog.reject)
@@ -1234,9 +1473,11 @@ class POSPage(QWidget):
     
     def process_payment(self):
         """Traiter le paiement"""
+        _ = i18n_manager.get
         # Check explicitement si items est vide
         if not self.cart.items:
-            QMessageBox.warning(self, "Panier vide", "Ajoutez des produits avant de payer")
+            # Reusing msg_cart_empty_pay or similar
+            QMessageBox.warning(self, _("title_warning"), _("msg_cart_empty_pay"))
             return
         
         try:
@@ -1245,9 +1486,35 @@ class POSPage(QWidget):
             
             # Vérifier si crédit est sélectionné mais pas de client
             if payment_method == 'credit' and not customer_id:
-                QMessageBox.warning(self, "Client requis", 
-                    "Vous devez sélectionner un client pour un paiement à crédit")
+                QMessageBox.warning(self, _("title_warning"), 
+                    _("msg_client_required_credit"))
                 return
+            
+            # ===== CREDIT LIMIT CHECK =====
+            if payment_method == 'credit' and customer_id:
+                customer = customer_manager.get_customer(customer_id)
+                if customer:
+                    current_credit = float(customer.get('current_credit', 0) or 0)
+                    credit_limit = float(customer.get('credit_limit', 0) or 0)
+                    sale_total = self.cart.get_total()
+                    new_credit = current_credit + sale_total
+                    
+                    if credit_limit > 0 and new_credit > credit_limit:
+                        # Check if user has override permission
+                        can_override = auth_manager.has_permission('override_credit_limit')
+                        
+                        if not can_override:
+                            QMessageBox.critical(self, _("msg_credit_limit_exceeded"), 
+                                _("msg_credit_limit_details").format(credit_limit, current_credit, sale_total, new_credit))
+                            return
+                        else:
+                            # Admin can override - show warning and confirm
+                            confirm = QMessageBox.warning(self, _("msg_override_credit"),
+                                _("msg_override_credit_details").format(credit_limit, new_credit),
+                                QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+                            if confirm != QMessageBox.Yes:
+                                return
+            # ===== END CREDIT LIMIT CHECK =====
             
             # Obtenir l'utilisateur actuel (caissier)
             current_user = auth_manager.get_current_user()
@@ -1277,15 +1544,25 @@ class POSPage(QWidget):
                         preview.exec_()
                 else:
                     # Juste un message de succès sans impression
-                    QMessageBox.information(self, "✅ Vente enregistrée", 
-                        f"Vente #{message.split(':')[-1].strip()} enregistrée avec succès!")
+                    # Extract ID from message if complex or use sale_id
+                    QMessageBox.information(self, _("title_success"), 
+                        _("msg_sale_recorded").format(sale_id))
                 
             else:
-                QMessageBox.warning(self, "Erreur", message)
+                QMessageBox.warning(self, _("title_error"), message)
                 
         except Exception as e:
             logger.error(f"Erreur paiement: {e}")
-            QMessageBox.critical(self, "Erreur", f"Une erreur est survenue: {e}")
+            QMessageBox.critical(self, _("title_error"), f"{_('system_error').format(e)}")
+
+    def update_totals(self):
+        """Mettre à jour les totaux"""
+        _ = i18n_manager.get
+        discount = self.cart.get_discount_amount()
+        total = self.cart.get_total()
+        
+        self.header_discount_label.setText(_("label_discount").format(discount))
+        self.header_total_label.setText(_("label_total").format(total))
 
     def refresh(self):
         """Rafraîchir les données de la page"""
@@ -1308,27 +1585,28 @@ class POSPage(QWidget):
     
     def add_from_calculator(self):
         """Ajouter le montant de la calculatrice au panier"""
+        _ = i18n_manager.get
         try:
             price = int(self.calc_display.text())
         except:
             price = 0
             
         if price <= 0:
-            QMessageBox.warning(self, "Attention", "Le montant doit être supérieur à 0")
+            QMessageBox.warning(self, _("title_warning"), _("msg_amount_positive"))
             return
             
         success, msg = pos_manager.add_to_cart(
             product_id=0,
             quantity=1,
             custom_price=price,
-            product_name="Produit Divers"
+            product_name=_("product_misc")
         )
         
         if success:
             self.calc_display.setText("0")
             self.update_cart_display()
         else:
-            QMessageBox.warning(self, "Erreur", msg)
+            QMessageBox.warning(self, _("title_error"), msg)
             
 
 class CalculatorDialog(QDialog):

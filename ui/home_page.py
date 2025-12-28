@@ -8,7 +8,7 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
 from PyQt5.QtCore import Qt, pyqtSignal, QPropertyAnimation, QEasingCurve
 from PyQt5.QtGui import QFont, QColor
 from datetime import datetime
-
+from core.i18n import i18n_manager
 
 class StatCard(QFrame):
     """Carte de statistique moderne"""
@@ -56,13 +56,13 @@ class StatCard(QFrame):
         icon_label.setStyleSheet("font-size: 28px; background: transparent;")
         top_layout.addWidget(icon_label)
         
-        title_label = QLabel(title)
-        title_label.setStyleSheet("""
+        self.title_label = QLabel(title)
+        self.title_label.setStyleSheet("""
             color: rgba(255,255,255,0.9);
             font-size: 13px;
             background: transparent;
         """)
-        top_layout.addWidget(title_label)
+        top_layout.addWidget(self.title_label)
         top_layout.addStretch()
         
         layout.addLayout(top_layout)
@@ -78,13 +78,13 @@ class StatCard(QFrame):
         layout.addWidget(self.value_label)
         
         # Sous-titre
-        sub_label = QLabel(subtitle)
-        sub_label.setStyleSheet("""
+        self.sub_label = QLabel(subtitle)
+        self.sub_label.setStyleSheet("""
             color: rgba(255,255,255,0.8);
             font-size: 12px;
             background: transparent;
         """)
-        layout.addWidget(sub_label)
+        layout.addWidget(self.sub_label)
         
         self.setLayout(layout)
     
@@ -181,13 +181,33 @@ class HomePage(QWidget):
         super().__init__(parent)
         self.init_ui()
         self.load_stats()
+        
+        # Connect to language change
+        i18n_manager.language_changed.connect(self.update_ui_text)
     
     def init_ui(self):
         """Initialiser l'interface"""
-        # Style de fond
-        self.setStyleSheet("background-color: #f8fafc;")
+        # Create a main layout if it doesn't exist
+        if not self.layout():
+            layout = QVBoxLayout()
+            layout.setContentsMargins(0, 0, 0, 0)
+            self.setLayout(layout)
         
-        main_layout = QVBoxLayout()
+        # Create fresh container
+        self.container = QWidget()
+        self.layout().addWidget(self.container)
+        
+        # Build UI inside container
+        self.build_ui_content(self.container)
+
+    def build_ui_content(self, parent_widget):
+        """Construire le contenu de l'interface dans un widget parent"""
+        _ = i18n_manager.get
+        
+        # Style de fond
+        parent_widget.setStyleSheet("background-color: #f8fafc;")
+        
+        main_layout = QVBoxLayout(parent_widget)
         main_layout.setSpacing(25)
         main_layout.setContentsMargins(30, 25, 30, 25)
         
@@ -199,17 +219,17 @@ class HomePage(QWidget):
         stats_layout = QHBoxLayout()
         stats_layout.setSpacing(20)
         
-        self.stat_sales = StatCard("💰", "Ventes Aujourd'hui", "0 DA", "Chiffre d'affaires", "#8b5cf6")
+        self.stat_sales = StatCard("💰", _('stats_sales'), "0 DA", _('stats_turnover'), "#8b5cf6")
         stats_layout.addWidget(self.stat_sales)
         
-        self.stat_products = StatCard("📦", "Produits", "0", "En stock", "#3b82f6")
+        self.stat_products = StatCard("📦", _('stats_products'), "0", _('stats_in_stock'), "#3b82f6")
         stats_layout.addWidget(self.stat_products)
         
-        self.stat_expiring = StatCard("📅", "Expiration", "0", "Expire bientôt", "#ef4444")
+        self.stat_expiring = StatCard("📅", _('stats_expiration'), "0", _('stats_expiring_soon'), "#ef4444")
         self.stat_expiring.clicked.connect(lambda: self.navigate_to.emit("products"))
         stats_layout.addWidget(self.stat_expiring)
         
-        self.stat_alerts = StatCard("⚠️", "Alertes", "0", "Stock faible", "#f59e0b")
+        self.stat_alerts = StatCard("⚠️", _('stats_alerts'), "0", _('stats_low_stock'), "#f59e0b")
         self.stat_alerts.clicked.connect(self.go_to_low_stock)
         stats_layout.addWidget(self.stat_alerts)
         
@@ -220,7 +240,7 @@ class HomePage(QWidget):
         main_layout.addWidget(scan_section)
         
         # Accès rapide
-        access_title = QLabel("🚀 Accès Rapide")
+        access_title = QLabel(_('quick_access_title'))
         access_title.setStyleSheet("""
             font-size: 18px;
             font-weight: bold;
@@ -232,33 +252,33 @@ class HomePage(QWidget):
         access_layout = QHBoxLayout()
         access_layout.setSpacing(20)
         
-        btn_pos = QuickAccessButton("🛒", "Caisse", "Vente rapide", "#8b5cf6")
+        btn_pos = QuickAccessButton("🛒", _('qa_pos_title'), _('qa_pos_sub'), "#8b5cf6")
         btn_pos.clicked.connect(lambda: self.navigate_to.emit("pos"))
         access_layout.addWidget(btn_pos)
         
-        btn_products = QuickAccessButton("📦", "Produits", "Gérer stock", "#3b82f6")
+        btn_products = QuickAccessButton("📦", _('qa_products_title'), _('qa_products_sub'), "#3b82f6")
         btn_products.clicked.connect(lambda: self.navigate_to.emit("products"))
         access_layout.addWidget(btn_products)
         
-        btn_customers = QuickAccessButton("👥", "Clients", "Fidélité", "#10b981")
+        btn_customers = QuickAccessButton("👥", _('qa_customers_title'), _('qa_customers_sub'), "#10b981")
         btn_customers.clicked.connect(lambda: self.navigate_to.emit("customers"))
         access_layout.addWidget(btn_customers)
         
-        btn_suppliers = QuickAccessButton("🏭", "Fournisseurs", "Dettes", "#f59e0b")
+        btn_suppliers = QuickAccessButton("🏭", _('qa_suppliers_title'), _('qa_suppliers_sub'), "#f59e0b")
         btn_suppliers.clicked.connect(lambda: self.navigate_to.emit("suppliers"))
         access_layout.addWidget(btn_suppliers)
         
-        btn_reports = QuickAccessButton("📊", "Rapports", "Statistiques", "#ef4444")
+        btn_reports = QuickAccessButton("📊", _('qa_reports_title'), _('qa_reports_sub'), "#ef4444")
         btn_reports.clicked.connect(lambda: self.navigate_to.emit("reports"))
         access_layout.addWidget(btn_reports)
         
         main_layout.addLayout(access_layout)
         
         main_layout.addStretch()
-        self.setLayout(main_layout)
     
     def create_header(self):
         """Créer l'en-tête"""
+        _ = i18n_manager.get
         layout = QHBoxLayout()
         
         # Titre avec salutation
@@ -272,7 +292,7 @@ class HomePage(QWidget):
         """)
         left_layout.addWidget(greeting_label)
         
-        title = QLabel("Tableau de Bord")
+        title = QLabel(_('dashboard_title'))
         title.setFont(QFont("Segoe UI", 28, QFont.Bold))
         title.setStyleSheet("color: #1f2937;")
         left_layout.addWidget(title)
@@ -294,12 +314,17 @@ class HomePage(QWidget):
         date_layout = QVBoxLayout(date_frame)
         date_layout.setContentsMargins(15, 10, 15, 10)
         
+        # In Arabic, strftime matching might need locale setting or manual map. 
+        # For now, we stick to simple English-based names or just use a standard format.
+        # But we have `date_format` in i18n.
+        
         day_label = QLabel(now.strftime("%A"))
         day_label.setStyleSheet("color: #8b5cf6; font-weight: bold; font-size: 14px;")
         day_label.setAlignment(Qt.AlignCenter)
         date_layout.addWidget(day_label)
         
-        date_label = QLabel(now.strftime("%d %B %Y"))
+        date_str = now.strftime(_('date_format'))
+        date_label = QLabel(date_str)
         date_label.setStyleSheet("color: #374151; font-size: 13px;")
         date_label.setAlignment(Qt.AlignCenter)
         date_layout.addWidget(date_label)
@@ -310,16 +335,18 @@ class HomePage(QWidget):
     
     def get_greeting(self):
         """Obtenir le message de salutation selon l'heure"""
+        _ = i18n_manager.get
         hour = datetime.now().hour
         if hour < 12:
-            return "Bonjour"
+            return _('greeting_morning')
         elif hour < 18:
-            return "Bon après-midi"
+            return _('greeting_afternoon')
         else:
-            return "Bonsoir"
+            return _('greeting_evening')
     
     def create_scan_section(self):
         """Créer la section de scan rapide"""
+        _ = i18n_manager.get
         frame = QFrame()
         frame.setStyleSheet("""
             QFrame {
@@ -347,7 +374,7 @@ class HomePage(QWidget):
         # Texte
         text_layout = QVBoxLayout()
         
-        title = QLabel("Scan Rapide")
+        title = QLabel(_('scan_title'))
         title.setStyleSheet("""
             color: white;
             font-size: 20px;
@@ -356,7 +383,7 @@ class HomePage(QWidget):
         """)
         text_layout.addWidget(title)
         
-        subtitle = QLabel("Scannez un produit pour l'ajouter au panier")
+        subtitle = QLabel(_('scan_subtitle'))
         subtitle.setStyleSheet("""
             color: rgba(255,255,255,0.8);
             font-size: 13px;
@@ -369,7 +396,7 @@ class HomePage(QWidget):
         
         # Input de scan
         self.scan_input = QLineEdit()
-        self.scan_input.setPlaceholderText("Code-barres...")
+        self.scan_input.setPlaceholderText(_('scan_placeholder'))
         self.scan_input.setMinimumWidth(250)
         self.scan_input.setMinimumHeight(50)
         self.scan_input.setStyleSheet("""
@@ -392,7 +419,7 @@ class HomePage(QWidget):
         layout.addWidget(self.scan_input)
         
         # Bouton
-        scan_btn = QPushButton("🛒 Ajouter")
+        scan_btn = QPushButton(_('scan_btn'))
         scan_btn.setCursor(Qt.PointingHandCursor)
         scan_btn.setMinimumHeight(50)
         scan_btn.setStyleSheet("""
@@ -423,6 +450,9 @@ class HomePage(QWidget):
     
     def load_stats(self):
         """Charger les statistiques"""
+        # Note: We rely on init_ui to set the static labels. 
+        # Here we only update numeric values which don't need translation.
+        # But wait, date string in StatCard is not dynamically updated here, just the values.
         try:
             from database.db_manager import db
             
@@ -470,3 +500,40 @@ class HomePage(QWidget):
     def go_to_low_stock(self):
         """Naviguer vers la page produits filtrée par stock faible"""
         self.navigate_to.emit("products_low_stock")
+    
+    def update_ui_text(self):
+        """Mettre à jour les textes de l'interface lors du changement de langue"""
+        # Save current layout state
+        old_layout = self.layout()
+        
+        # Clear the current layout
+        if old_layout:
+            self._clear_layout(old_layout)
+        
+        # Rebuild the UI with new translations
+        self.init_ui()
+        self.load_stats()
+        
+        # Update layout direction for RTL
+        if i18n_manager.is_rtl():
+            self.setLayoutDirection(Qt.RightToLeft)
+        else:
+            self.setLayoutDirection(Qt.LeftToRight)
+            
+        # Force update
+        self.update()
+    
+    def _clear_layout(self, layout):
+        """Recursively clear a layout"""
+        if layout is None:
+            return
+            
+        while layout.count():
+            item = layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+            elif item.layout():
+                self._clear_layout(item.layout())
+                # Delete the sub-layout object
+                item.layout().deleteLater()

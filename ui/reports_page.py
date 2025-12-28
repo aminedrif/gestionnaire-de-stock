@@ -4,12 +4,15 @@ Interface des rapports
 """
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                              QPushButton, QDateEdit, QTableWidget, QTableWidgetItem,
-                             QComboBox, QFrame, QHeaderView, QTabWidget, QGridLayout, QAbstractItemView)
+                             QComboBox, QFrame, QHeaderView, QTabWidget, QGridLayout, 
+                             QAbstractItemView, QMessageBox)
 from PyQt5.QtCore import Qt, QDate
 from PyQt5.QtGui import QColor, QFont
 from modules.reports.profit_report import profit_report_manager
 from core.logger import logger
 import datetime
+
+from core.i18n import i18n_manager
 
 class KPICard(QFrame):
     def __init__(self, title, value, color="#3498db", parent=None):
@@ -46,22 +49,69 @@ class ReportsPage(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.init_ui()
+        # Connect to language change
+        i18n_manager.language_changed.connect(self.update_ui_text)
+        
+        # Initial load
         self.refresh_data()
         
     def init_ui(self):
-        layout = QVBoxLayout()
+        # Create a main layout if it doesn't exist
+        if not self.layout():
+            layout = QVBoxLayout()
+            layout.setContentsMargins(0, 0, 0, 0)
+            self.setLayout(layout)
+        
+        # Create fresh container
+        self.container = QWidget()
+        self.layout().addWidget(self.container)
+        
+        # Build UI inside container
+        self.build_ui_content(self.container)
+
+    def update_ui_text(self):
+        """Mettre à jour les textes de l'interface"""
+        # Save current dates
+        current_start = self.start_date.date()
+        current_end = self.end_date.date()
+        
+        # Remove old container
+        if hasattr(self, 'container'):
+            self.container.deleteLater()
+        
+        # Create new container
+        self.container = QWidget()
+        self.layout().addWidget(self.container)
+        
+        # Update layout direction
+        if i18n_manager.is_rtl():
+             self.setLayoutDirection(Qt.RightToLeft)
+        else:
+             self.setLayoutDirection(Qt.LeftToRight)
+        
+        # Rebuild UI
+        self.build_ui_content(self.container)
+        
+        # Restore dates and Refresh Data
+        self.start_date.setDate(current_start)
+        self.end_date.setDate(current_end)
+        self.refresh_data()
+
+    def build_ui_content(self, parent_widget):
+        _ = i18n_manager.get
+        layout = QVBoxLayout(parent_widget)
         layout.setSpacing(15)
         
         # En-tête
-        header = QLabel("📊 Rapports & Statistiques")
+        header = QLabel(_('reports_title'))
         header.setStyleSheet("font-size: 24px; font-weight: bold; color: #2c3e50; margin-bottom: 10px;")
         layout.addWidget(header)
         
-        # Toolbar (Période) - Améliorée
+        # Toolbar (Période)
         toolbar = QHBoxLayout()
         toolbar.setSpacing(10)
         
-        period_label = QLabel("📅 Période:")
+        period_label = QLabel(_('label_period'))
         period_label.setStyleSheet("font-size: 14px; font-weight: bold;")
         toolbar.addWidget(period_label)
         
@@ -80,7 +130,7 @@ class ReportsPage(QWidget):
         """)
         toolbar.addWidget(self.start_date)
         
-        toolbar.addWidget(QLabel(" à "))
+        toolbar.addWidget(QLabel(_('label_to')))
         
         self.end_date = QDateEdit()
         self.end_date.setCalendarPopup(True)
@@ -97,7 +147,7 @@ class ReportsPage(QWidget):
         """)
         toolbar.addWidget(self.end_date)
         
-        refresh_btn = QPushButton("🔄 Actualiser")
+        refresh_btn = QPushButton(_('btn_refresh_report'))
         refresh_btn.setMinimumHeight(50)
         refresh_btn.setCursor(Qt.PointingHandCursor)
         refresh_btn.setStyleSheet("""
@@ -120,13 +170,13 @@ class ReportsPage(QWidget):
         toolbar.addStretch()
         layout.addLayout(toolbar)
         
-        # KPI Cards (Cartes indicateurs) - Plus grandes
+        # KPI Cards (Cartes indicateurs)
         kpi_layout = QHBoxLayout()
         kpi_layout.setSpacing(15)
-        self.card_sales = KPICard("Chiffre d'Affaires", "0 DA", "#3498db")
-        self.card_profit = KPICard("Bénéfice Net", "0 DA", "#2ecc71")
-        self.card_margin = KPICard("Marge", "0%", "#f1c40f")
-        self.card_count = KPICard("Nombre de Ventes", "0", "#9b59b6")
+        self.card_sales = KPICard(_('kpi_turnover'), "0 DA", "#3498db")
+        self.card_profit = KPICard(_('kpi_net_profit'), "0 DA", "#2ecc71")
+        self.card_margin = KPICard(_('kpi_margin'), "0%", "#f1c40f")
+        self.card_count = KPICard(_('kpi_sale_count'), "0", "#9b59b6")
         
         kpi_layout.addWidget(self.card_sales)
         kpi_layout.addWidget(self.card_profit)
@@ -170,39 +220,53 @@ class ReportsPage(QWidget):
         # Onglet 1: Ventes par jour
         self.daily_table = QTableWidget()
         self.daily_table.setColumnCount(4)
-        self.daily_table.setHorizontalHeaderLabels(["Date", "Ventes", "Coût", "Bénéfice"])
+        self.daily_table.setHorizontalHeaderLabels(_('table_headers_daily'))
         self.daily_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.daily_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.daily_table.setAlternatingRowColors(True)
         self.daily_table.verticalHeader().setDefaultSectionSize(45)
         self.daily_table.setStyleSheet(table_style)
-        tabs.addTab(self.daily_table, "📅 Ventes par Jour")
+        tabs.addTab(self.daily_table, _('tab_daily_sales'))
         
         # Onglet 2: Top Produits
         self.product_table = QTableWidget()
         self.product_table.setColumnCount(5)
-        self.product_table.setHorizontalHeaderLabels(["Produit", "Qté Vendue", "CA", "Bénéfice", "Marge"])
+        self.product_table.setHorizontalHeaderLabels(_('table_headers_products_report'))
         self.product_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.product_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.product_table.setAlternatingRowColors(True)
         self.product_table.verticalHeader().setDefaultSectionSize(45)
         self.product_table.setStyleSheet(table_style)
-        tabs.addTab(self.product_table, "📦 Top Produits")
+        tabs.addTab(self.product_table, _('tab_top_products'))
         
         # Onglet 3: Ventes par Utilisateur
         self.user_sales_table = QTableWidget()
         self.user_sales_table.setColumnCount(5)
-        self.user_sales_table.setHorizontalHeaderLabels(["Utilisateur", "Rôle", "Nb Ventes", "CA Total", "Bénéfice"])
+        self.user_sales_table.setHorizontalHeaderLabels(_('table_headers_users_report'))
         self.user_sales_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.user_sales_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.user_sales_table.setAlternatingRowColors(True)
         self.user_sales_table.verticalHeader().setDefaultSectionSize(45)
         self.user_sales_table.setStyleSheet(table_style)
-        tabs.addTab(self.user_sales_table, "👤 Ventes par Utilisateur")
+        tabs.addTab(self.user_sales_table, _('tab_user_sales'))
+        
+        # Onglet 4: Clôture / Résumé Financier
+        self.closure_widget = QWidget()
+        closure_layout = QVBoxLayout(self.closure_widget)
+        self.closure_label = QLabel(_('label_closure_info'))
+        self.closure_label.setStyleSheet("font-size: 16px; line-height: 1.5; padding: 20px; background: white; border-radius: 10px;")
+        self.closure_label.setAlignment(Qt.AlignTop)
+        closure_layout.addWidget(self.closure_label)
+        closure_layout.addStretch()
+        
+        print_closure_btn = QPushButton(_('btn_print_closure'))
+        print_closure_btn.clicked.connect(self.print_closure_summary)
+        closure_layout.addWidget(print_closure_btn)
+        
+        tabs.addTab(self.closure_widget, _('tab_closure'))
         
         layout.addWidget(tabs)
-        self.setLayout(layout)
-        
+
     def refresh_data(self):
         start = self.start_date.date().toString("yyyy-MM-dd")
         end = self.end_date.date().toString("yyyy-MM-dd")
@@ -246,6 +310,9 @@ class ReportsPage(QWidget):
         
         # 4. Sales by User
         self.load_sales_by_user(start, end)
+        
+        # 5. Financial Closure Summary
+        self.update_closure_summary(start, end)
 
     def load_sales_by_user(self, start_date: str, end_date: str):
         """Charger les ventes par utilisateur"""
@@ -294,120 +361,60 @@ class ReportsPage(QWidget):
                 profit_item.setForeground(QColor("red"))
             self.user_sales_table.setItem(row, 4, profit_item)
 
+    def update_closure_summary(self, start_date, end_date):
+        _ = i18n_manager.get
+        from database.db_manager import db
+        
+        query = """
+            SELECT 
+                payment_method,
+                SUM(total_amount) as total,
+                COUNT(id) as count
+            FROM sales
+            WHERE DATE(sale_date) BETWEEN ? AND ? AND status = 'completed'
+            GROUP BY payment_method
+        """
+        results = db.execute_query(query, (start_date, end_date))
+        
+        # Group returns
+        ret_res = db.fetch_one("SELECT SUM(return_amount) as total FROM returns", ()) # Placeholder, refine if date available
+        
+        # Calculate totals
+        cash_total = 0
+        credit_total = 0
+        other_total = 0
+        counts = {'cash':0, 'credit':0}
+        
+        for res in results:
+            pm = res['payment_method']
+            if pm == 'cash':
+                cash_total = res['total']
+                counts['cash'] = res['count']
+            elif pm == 'credit':
+                credit_total = res['total']
+                counts['credit'] = res['count']
+            else:
+                other_total += res['total']
+                
+        summary_text = f"""
+        <h2 style='color: #2c3e50;'>{_('closure_summary_title').format(start_date, end_date)}</h2>
+        <hr>
+        <table width='100%' style='font-size: 16px; border-collapse: collapse;'>
+            <tr><td style='padding: 8px;'><b>{_('closure_cash')}</b></td><td align='right'>{cash_total:,.2f} DA ({counts['cash']})</td></tr>
+            <tr><td style='padding: 8px;'><b>{_('closure_credit')}</b></td><td align='right'>{credit_total:,.2f} DA ({counts['credit']})</td></tr>
+            <tr><td style='padding: 8px;'><b>{_('closure_other')}</b></td><td align='right'>{other_total:,.2f} DA</td></tr>
+            <tr style='background-color: #f8f9fa;'><td style='padding: 8px;'><b>{_('closure_total')}</b></td><td align='right'><b>{(cash_total+credit_total+other_total):,.2f} DA</b></td></tr>
+            <tr><td colspan='2'><br></td></tr>
+            <tr><td style='padding: 8px; color: #e74c3c;'><b>{_('closure_returns')}</b></td><td align='right' style='color: #e74c3c;'>{ret_res['total'] or 0:,.2f} DA</td></tr>
+        </table>
+        """
+        self.closure_label.setText(summary_text)
+
+    def print_closure_summary(self):
+        # Pourrait générer un PDF, mais pour l'instant on affiche un message
+        QMessageBox.information(self, "Impression", "Le rapport de clôture a été généré (Simulé).")
+
     def refresh(self):
         """Rafraîchir les données"""
         self.refresh_data()
-    
-    def set_dark_mode(self, is_dark):
-        """Appliquer le mode sombre/clair"""
-        if is_dark:
-            # Mode sombre pour les KPI cards
-            kpi_style = """
-                QFrame {
-                    background-color: #34495e;
-                    border-radius: 10px;
-                    padding: 15px;
-                }
-                QLabel {
-                    color: #ecf0f1;
-                }
-            """
-            table_style = """
-                QTableWidget {
-                    background-color: #34495e;
-                    color: #ecf0f1;
-                    gridline-color: #4a6785;
-                    border: 1px solid #4a6785;
-                    border-radius: 8px;
-                }
-                QTableWidget::item {
-                    padding: 8px;
-                    border-bottom: 1px solid #4a6785;
-                }
-                QTableWidget::item:selected {
-                    background-color: #3498db;
-                    color: white;
-                }
-                QTableWidget::item:alternate {
-                    background-color: #2c3e50;
-                }
-                QHeaderView::section {
-                    background-color: #3498db;
-                    color: white;
-                    padding: 10px;
-                    border: none;
-                    font-weight: bold;
-                }
-            """
-            input_style = """
-                QDateEdit {
-                    background-color: #34495e;
-                    color: #ecf0f1;
-                    border: 2px solid #4a6785;
-                    border-radius: 8px;
-                    padding: 8px;
-                }
-            """
-        else:
-            # Mode clair
-            kpi_style = """
-                QFrame {
-                    background-color: white;
-                    border-radius: 10px;
-                    padding: 15px;
-                }
-                QLabel {
-                    color: #2c3e50;
-                }
-            """
-            table_style = """
-                QTableWidget {
-                    background-color: white;
-                    color: #2c3e50;
-                    gridline-color: #e0e0e0;
-                    border: 1px solid #e0e0e0;
-                    border-radius: 8px;
-                }
-                QTableWidget::item {
-                    padding: 8px;
-                    border-bottom: 1px solid #e0e0e0;
-                }
-                QTableWidget::item:selected {
-                    background-color: #3498db;
-                    color: white;
-                }
-                QTableWidget::item:alternate {
-                    background-color: #f8f9fa;
-                }
-                QHeaderView::section {
-                    background-color: #3498db;
-                    color: white;
-                    padding: 10px;
-                    border: none;
-                    font-weight: bold;
-                }
-            """
-            input_style = """
-                QDateEdit {
-                    background-color: white;
-                    color: #2c3e50;
-                    border: 2px solid #e0e0e0;
-                    border-radius: 8px;
-                    padding: 8px;
-                }
-            """
-        
-        # Appliquer aux KPI
-        for kpi in [self.total_sales_kpi, self.profit_kpi, self.profit_margin_kpi, self.avg_basket_kpi]:
-            kpi.setStyleSheet(kpi_style)
-        
-        # Appliquer aux tables
-        for table in [self.sales_table, self.profits_table, self.user_sales_table]:
-            table.setStyleSheet(table_style)
-        
-        # Appliquer aux inputs
-        if hasattr(self, 'start_date'):
-            self.start_date.setStyleSheet(input_style)
-        if hasattr(self, 'end_date'):
-            self.end_date.setStyleSheet(input_style)
 
