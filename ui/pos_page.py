@@ -2460,13 +2460,13 @@ class POSPage(QWidget):
                 if self.print_receipt_cb.isChecked():
                     sale_data = pos_manager.get_sale(sale_id)
                     if sale_data:
-                        preview = ReceiptPreviewDialog(sale_data, self)
-                        preview.exec_()
-                else:
-                    # Juste un message de succès sans impression
-                    # Extract ID from message if complex or use sale_id
-                    QMessageBox.information(self, _("title_success"), 
-                        _("msg_sale_recorded").format(sale_id))
+                        # Impression directe et silencieuse selon les paramètres
+                        from modules.sales.printer import printer_manager
+                        printer_manager.print_receipt(sale_data)
+                
+                # Toujours afficher le message de succès
+                QMessageBox.information(self, _("title_success"), 
+                    _("msg_sale_recorded").format(sale_id))
                 
             else:
                 QMessageBox.warning(self, _("title_error"), message)

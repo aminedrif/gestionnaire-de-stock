@@ -151,11 +151,24 @@ class ReceiptGenerator:
             True si succès
         """
         try:
-            # Créer le PDF - Format ticket 80mm x 80mm
-            c = canvas.Canvas(str(output_path), pagesize=(80*mm, 80*mm))
+            # Calcul de la hauteur nécessaire (dynamique)
+            base_height = 70  # mm (en-tête + infos de base + totaux + pied)
+            
+            # Ajouter 3mm si y'a un client
+            if sale_data.get('customer_name'):
+                base_height += 3
+                
+            # Ajouter la hauteur pour chaque article (nom + prix)
+            for item in sale_data['items']:
+                base_height += 6
+                if item.get('discount_percentage', 0) > 0:
+                    base_height += 2.5
+            
+            # Créer le PDF - Format ticket 80mm x Hauteur dynamique
+            c = canvas.Canvas(str(output_path), pagesize=(80*mm, base_height*mm))
             
             # Position de départ
-            y = 74 * mm
+            y = (base_height - 6) * mm
             x_center = 40 * mm
             
             # En-tête

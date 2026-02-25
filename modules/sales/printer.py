@@ -134,11 +134,6 @@ class PrinterManager:
             
             if success:
                 logger.info(f"Ticket PDF généré: {output_path}")
-                
-                # Ouvrir le PDF automatiquement
-                import os
-                os.startfile(str(output_path))
-                
                 return True, f"Ticket PDF généré: {filename}"
             else:
                 return False, "Erreur lors de la génération du PDF"
@@ -318,10 +313,6 @@ class PrinterManager:
                 output_path = receipts_dir / filename
                 
                 receipt_generator.generate_return_pdf_receipt(return_data, output_path)
-                
-                # Ouvrir le PDF automatiquement
-                import os
-                os.startfile(str(output_path))
                 
                 return True, f"Ticket de retour PDF généré: {filename}"
                 
