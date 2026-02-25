@@ -49,6 +49,8 @@ class SettingsPage(QWidget):
         """Mettre à jour les textes de l'interface"""
         # Remove old container
         if hasattr(self, 'container'):
+            if self.layout():
+                self.layout().removeWidget(self.container)
             self.container.deleteLater()
         
         # Create new container
@@ -139,6 +141,10 @@ class SettingsPage(QWidget):
             # Onglet Magasin
             self.store_tab = self.create_store_tab()
             tabs.addTab(self.store_tab, _('tab_store'))
+            
+            # Onglet Sécurité
+            self.security_tab = self.create_security_tab()
+            tabs.addTab(self.security_tab, "Sécurité")
         
         # Onglet Tutoriel (Pour tous)
         self.tutorial_tab = self.create_tutorial_tab()
@@ -149,6 +155,110 @@ class SettingsPage(QWidget):
         tabs.addTab(self.about_tab, _('tab_about'))
         
         layout.addWidget(tabs)
+
+    def create_security_tab(self):
+        """Onglet de sécurité"""
+        tab = QWidget()
+        layout = QVBoxLayout()
+        
+        # Safe Security Group
+        safe_group = QGroupBox("Sécurité Coffre")
+        form = QFormLayout()
+        
+        # Status indicator
+        self.safe_password_status = QLabel()
+        try:
+            res = db.fetch_one("SELECT setting_value FROM settings WHERE setting_key = 'safe_password'")
+            has_password = res and res['setting_value']
+            if has_password:
+                self.safe_password_status.setText("✅ Mot de passe défini")
+                self.safe_password_status.setStyleSheet("color: #27ae60; font-weight: bold;")
+            else:
+                self.safe_password_status.setText("⚠️ Aucun mot de passe (accès libre)")
+                self.safe_password_status.setStyleSheet("color: #e67e22; font-weight: bold;")
+        except Exception as e:
+            logger.error(f"Error loading safe password status: {e}")
+            self.safe_password_status.setText("❓ Erreur de chargement")
+        
+        form.addRow("État actuel:", self.safe_password_status)
+        
+        # New password field (always empty - user types new password)
+        self.safe_password_edit = QLineEdit()
+        self.safe_password_edit.setEchoMode(QLineEdit.Password)
+        self.safe_password_edit.setPlaceholderText("Entrez un nouveau mot de passe (vide = désactiver)")
+        
+        form.addRow("Nouveau mot de passe:", self.safe_password_edit)
+        
+        # Buttons
+        btn_layout = QHBoxLayout()
+        
+        save_btn = QPushButton("💾 Enregistrer")
+        save_btn.clicked.connect(self.save_safe_security)
+        save_btn.setStyleSheet("background-color: #27ae60; color: white; padding: 8px;")
+        
+        clear_btn = QPushButton("🗑️ Supprimer le mot de passe")
+        clear_btn.clicked.connect(self.clear_safe_password)
+        clear_btn.setStyleSheet("background-color: #e74c3c; color: white; padding: 8px;")
+        
+        btn_layout.addWidget(save_btn)
+        btn_layout.addWidget(clear_btn)
+        form.addRow(btn_layout)
+        
+        safe_group.setLayout(form)
+        layout.addWidget(safe_group)
+        layout.addStretch()
+        
+        tab.setLayout(layout)
+        return tab
+    
+    def clear_safe_password(self):
+        """Supprimer le mot de passe du coffre"""
+        reply = QMessageBox.question(self, "Confirmation", 
+            "Voulez-vous vraiment supprimer le mot de passe du coffre?\nL'accès sera libre.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        
+        if reply == QMessageBox.Yes:
+            try:
+                db.execute_update("DELETE FROM settings WHERE setting_key = 'safe_password'")
+                self.safe_password_status.setText("⚠️ Aucun mot de passe (accès libre)")
+                self.safe_password_status.setStyleSheet("color: #e67e22; font-weight: bold;")
+                self.safe_password_edit.clear()
+                QMessageBox.information(self, "Succès", "Mot de passe supprimé")
+                logger.info("Safe password cleared")
+            except Exception as e:
+                QMessageBox.critical(self, "Erreur", str(e))
+
+
+    def save_safe_security(self):
+        """Enregistrer le mot de passe du coffre"""
+        password = self.safe_password_edit.text().strip()
+        
+        if not password:
+            # User submitted empty - same as clear
+            reply = QMessageBox.question(self, "Confirmation", 
+                "Le champ est vide. Voulez-vous supprimer le mot de passe?",
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+            if reply == QMessageBox.Yes:
+                self.clear_safe_password()
+            return
+        
+        try:
+            db.execute_update(
+                "INSERT OR REPLACE INTO settings (setting_key, setting_value) VALUES ('safe_password', ?)", 
+                (password,)
+            )
+            # Update status
+            self.safe_password_status.setText("✅ Mot de passe défini")
+            self.safe_password_status.setStyleSheet("color: #27ae60; font-weight: bold;")
+            self.safe_password_edit.clear()
+            
+            QMessageBox.information(self, "Succès", "Mot de passe coffre mis à jour")
+            logger.info("Safe password updated")
+        except Exception as e:
+            QMessageBox.critical(self, "Erreur", str(e))
+            logger.error(f"Error saving safe password: {e}")
+
+
 
     def create_data_tab(self):
         """Onglet de gestion des données"""
@@ -297,7 +407,7 @@ class SettingsPage(QWidget):
         try:
             from datetime import datetime
             default_name = f"backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-            filename, _ = QFileDialog.getSaveFileName(self, _('group_export'), 
+            filename, selected_filter = QFileDialog.getSaveFileName(self, _('group_export'), 
                                                     str(config.DATA_DIR / default_name), 
                                                     "Fichiers Excel (*.xlsx)")
             if not filename:
@@ -311,41 +421,104 @@ class SettingsPage(QWidget):
             # 1. Produits
             ws_prod = wb.active
             ws_prod.title = "Produits"
-            products = db.execute_query("SELECT barcode, name, category, purchase_price, selling_price, stock_quantity, min_stock FROM products")
+            # 1. Produits
+            ws_prod = wb.active
+            ws_prod.title = "Produits"
+            # Fixed Query: JOIN with categories table to get category name AND use correct min_stock_level column
+            products_query = """
+                SELECT p.barcode, p.name, c.name as category_name, 
+                       p.purchase_price, p.selling_price, p.stock_quantity, p.min_stock_level 
+                FROM products p
+                LEFT JOIN categories c ON p.category_id = c.id
+            """
+            products = db.execute_query(products_query)
             ws_prod.append(["Code-barres", "Nom", "Catégorie", "PA", "PV", "Stock", "Stock Min"])
             for p in products:
-                ws_prod.append([p['barcode'], p['name'], p.get('category', ''), p['purchase_price'], p['selling_price'], p['stock_quantity'], p.get('min_stock', 0)])
+                ws_prod.append([
+                    p['barcode'], 
+                    p['name'], 
+                    p['category_name'] or '', # Use category_name alias
+                    p['purchase_price'], 
+                    p['selling_price'], 
+                    p['stock_quantity'], 
+                    p['min_stock_level'] or 0
+                ])
                 
             # 2. Ventes
             ws_sales = wb.create_sheet("Ventes")
-            sales = db.execute_query("SELECT sale_number, total_amount, payment_method, sale_date, customer_id FROM sales")
-            ws_sales.append(["N° Vente", "Montant Total", "Paiement", "Date", "Client ID"])
+            sales = db.execute_query("SELECT sale_number, total_amount, payment_method, sale_date, customer_id, status FROM sales")
+            ws_sales.append(["N° Vente", "Montant Total", "Paiement", "Date", "Client ID", "Statut"])
             for s in sales:
-                ws_sales.append([s['sale_number'], s['total_amount'], s['payment_method'], s['sale_date'], s.get('customer_id', '')])
+                ws_sales.append([s['sale_number'], s['total_amount'], s['payment_method'], s['sale_date'], s['customer_id'] or '', s['status']])
 
-            # 3. Détails Ventes
+            # 3. Détails Ventes (Fixed: subtotal instead of total)
             ws_items = wb.create_sheet("Details_Ventes")
-            items = db.execute_query("SELECT sale_id, product_id, quantity, unit_price, total FROM sale_items")
-            ws_items.append(["ID Vente", "ID Produit", "Quantité", "Prix Unitaire", "Total"])
+            items = db.execute_query("SELECT sale_id, product_id, product_name, quantity, unit_price, subtotal FROM sale_items")
+            ws_items.append(["ID Vente", "ID Produit", "Nom Produit", "Quantité", "Prix Unitaire", "Sous-Total"])
             for i in items:
-                ws_items.append([i['sale_id'], i['product_id'], i['quantity'], i['unit_price'], i['total']])
+                ws_items.append([i['sale_id'], i['product_id'] or '', i['product_name'], i['quantity'], i['unit_price'], i['subtotal']])
 
-            # 4. Clients
+            # 4. Clients (More columns)
             ws_cust = wb.create_sheet("Clients")
-            customers = db.execute_query("SELECT full_name, phone, current_credit, total_purchases FROM customers")
-            ws_cust.append(["Nom", "Téléphone", "Dette", "Total Achats"])
+            customers = db.execute_query("SELECT code, full_name, phone, email, address, credit_limit, current_credit, total_purchases FROM customers")
+            ws_cust.append(["Code", "Nom", "Téléphone", "Email", "Adresse", "Limite Crédit", "Dette", "Total Achats"])
             for c in customers:
-                ws_cust.append([c['full_name'], c['phone'], c['current_credit'], c['total_purchases']])
+                ws_cust.append([c['code'], c['full_name'], c['phone'] or '', c['email'] or '', c['address'] or '', c['credit_limit'], c['current_credit'], c['total_purchases']])
 
-            # 5. Fournisseurs
+            # 5. Fournisseurs (Fixed: company_name instead of name)
             ws_sup = wb.create_sheet("Fournisseurs")
             try:
-                suppliers = db.execute_query("SELECT name, phone, email, address FROM suppliers")
-                ws_sup.append(["Nom", "Téléphone", "Email", "Adresse"])
+                suppliers = db.execute_query("SELECT code, company_name, contact_person, phone, email, address, total_debt, total_purchases FROM suppliers")
+                ws_sup.append(["Code", "Entreprise", "Contact", "Téléphone", "Email", "Adresse", "Dette", "Total Achats"])
                 for sup in suppliers:
-                    ws_sup.append([sup['name'], sup.get('phone', ''), sup.get('email', ''), sup.get('address', '')])
-            except:
+                    ws_sup.append([sup['code'] or '', sup['company_name'], sup['contact_person'] or '', sup['phone'] or '', sup['email'] or '', sup['address'] or '', sup['total_debt'], sup['total_purchases']])
+            except Exception as e:
+                logger.warning(f"Erreur export fournisseurs: {e}")
                 ws_sup.append(["Aucune donnée fournisseur"])
+            
+            # 6. Catégories (NEW)
+            ws_cat = wb.create_sheet("Categories")
+            try:
+                categories = db.execute_query("SELECT id, name, name_ar, description FROM categories WHERE is_active = 1")
+                ws_cat.append(["ID", "Nom", "Nom Arabe", "Description"])
+                for cat in categories:
+                    ws_cat.append([cat['id'], cat['name'], cat['name_ar'] or '', cat['description'] or ''])
+            except Exception as e:
+                logger.warning(f"Erreur export catégories: {e}")
+                ws_cat.append(["Aucune catégorie"])
+
+            # 7. Retours (NEW)
+            ws_ret = wb.create_sheet("Retours")
+            try:
+                returns = db.execute_query("SELECT return_number, original_sale_id, return_amount, refund_method, return_date, reason FROM returns")
+                ws_ret.append(["N° Retour", "ID Vente Originale", "Montant", "Méthode Remboursement", "Date", "Raison"])
+                for r in returns:
+                    ws_ret.append([r['return_number'], r['original_sale_id'], r['return_amount'], r['refund_method'], r['return_date'], r['reason'] or ''])
+            except Exception as e:
+                logger.warning(f"Erreur export retours: {e}")
+                ws_ret.append(["Aucun retour"])
+            
+            # 8. Détails Retours (NEW)
+            ws_ret_items = wb.create_sheet("Details_Retours")
+            try:
+                ret_items = db.execute_query("SELECT return_id, product_id, quantity_returned, unit_price, subtotal FROM return_items")
+                ws_ret_items.append(["ID Retour", "ID Produit", "Qté Retournée", "Prix Unitaire", "Sous-Total"])
+                for ri in ret_items:
+                    ws_ret_items.append([ri['return_id'], ri['product_id'] or '', ri['quantity_returned'], ri['unit_price'], ri['subtotal']])
+            except Exception as e:
+                logger.warning(f"Erreur export détails retours: {e}")
+                ws_ret_items.append(["Aucun détail retour"])
+            
+            # 9. Raccourcis POS (NEW)
+            ws_short = wb.create_sheet("Raccourcis")
+            try:
+                shortcuts = db.execute_query("SELECT id, label, product_id, category_id, price, image_path, position FROM pos_shortcuts ORDER BY position")
+                ws_short.append(["ID", "Libellé", "ID Produit", "ID Catégorie", "Prix", "Chemin Image", "Position"])
+                for sc in shortcuts:
+                    ws_short.append([sc['id'], sc['label'], sc['product_id'] or '', sc['category_id'] or '', sc['price'] or '', sc['image_path'] or '', sc['position']])
+            except Exception as e:
+                logger.warning(f"Erreur export raccourcis: {e}")
+                ws_short.append(["Aucun raccourci"])
             
             wb.save(filename)
             logger.info(f"Sauvegarde créée: {filename}")
@@ -366,7 +539,7 @@ class SettingsPage(QWidget):
             return
             
         try:
-            filename, _ = QFileDialog.getOpenFileName(self, _('group_import'),
+            filename, selected_filter = QFileDialog.getOpenFileName(self, _('group_import'),
                                                      str(config.DATA_DIR),
                                                      "Fichiers Excel (*.xlsx)")
             if not filename:
@@ -383,49 +556,102 @@ class SettingsPage(QWidget):
                 for row in ws.iter_rows(min_row=2, values_only=True):
                     if row[0]:  # barcode exists
                         try:
-                            # Try to keep Logic exactly as before
+                            # Handle Category Lookup/Creation
+                            cat_name = row[2] or ''
+                            cat_id = None
+                            if cat_name:
+                                # Find or Create Category
+                                cat_res = db.fetch_one("SELECT id FROM categories WHERE name = ?", (cat_name,))
+                                if cat_res:
+                                    cat_id = cat_res['id']
+                                else:
+                                    # Create new category if not exists
+                                    db.execute_update("INSERT INTO categories (name) VALUES (?)", (cat_name,))
+                                    cat_res = db.fetch_one("SELECT id FROM categories WHERE name = ?", (cat_name,))
+                                    if cat_res:
+                                        cat_id = cat_res['id']
+
                             db.execute_update("""
-                                INSERT OR REPLACE INTO products (barcode, name, category, purchase_price, selling_price, stock_quantity, min_stock)
+                                INSERT OR REPLACE INTO products (barcode, name, category_id, purchase_price, selling_price, stock_quantity, min_stock_level)
                                 VALUES (?, ?, ?, ?, ?, ?, ?)
-                            """, (row[0], row[1], row[2] or '', row[3] or 0, row[4] or 0, row[5] or 0, row[6] or 0))
+                            """, (row[0], row[1], cat_id, row[3] or 0, row[4] or 0, row[5] or 0, row[6] or 0))
                             count += 1
                         except:
                             pass
                 imported_counts["Produits"] = count
 
-            # 2. Importer Clients
+            # 2. Importer Clients (Updated format: Code, Nom, Tel, Email, Adresse, Limite, Dette, Total)
             if "Clients" in wb.sheetnames:
                 ws = wb["Clients"]
                 count = 0
                 for row in ws.iter_rows(min_row=2, values_only=True):
-                    if row[0]:  # nom exists
+                    if row[1]:  # full_name (column 1) exists
                         try:
-                            db.execute_update("""
-                                INSERT OR IGNORE INTO customers (full_name, phone, current_credit, total_purchases)
-                                VALUES (?, ?, ?, ?)
-                            """, (row[0], row[1] or '', row[2] or 0, row[3] or 0))
+                            # Handle both old (4 cols) and new (8 cols) format
+                            if len([x for x in row if x is not None]) >= 8:
+                                # New format with all columns
+                                db.execute_update("""
+                                    INSERT OR IGNORE INTO customers (code, full_name, phone, email, address, credit_limit, current_credit, total_purchases)
+                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                                """, (row[0] or '', row[1], row[2] or '', row[3] or '', row[4] or '', row[5] or 0, row[6] or 0, row[7] or 0))
+                            else:
+                                # Old format (Nom, Tel, Dette, Total)
+                                db.execute_update("""
+                                    INSERT OR IGNORE INTO customers (full_name, phone, current_credit, total_purchases)
+                                    VALUES (?, ?, ?, ?)
+                                """, (row[0], row[1] or '', row[2] or 0, row[3] or 0))
                             count += 1
                         except:
                             pass
                 imported_counts["Clients"] = count
 
-            # 3. Importer Fournisseurs
+            # 3. Importer Fournisseurs (Updated: Code, Entreprise, Contact, Tel, Email, Adresse, Dette, Total)
             if "Fournisseurs" in wb.sheetnames:
                 ws = wb["Fournisseurs"]
                 count = 0
                 for row in ws.iter_rows(min_row=2, values_only=True):
-                    if row[0] and row[0] != "Aucune donnée fournisseur":
+                    if row[1] and row[1] != "Aucune donnée fournisseur":  # company_name
                         try:
                             db.execute_update("""
-                                INSERT OR IGNORE INTO suppliers (name, phone, email, address)
-                                VALUES (?, ?, ?, ?)
-                            """, (row[0], row[1] or '', row[2] or '', row[3] or ''))
+                                INSERT OR IGNORE INTO suppliers (code, company_name, contact_person, phone, email, address, total_debt, total_purchases)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                            """, (row[0] or '', row[1], row[2] or '', row[3] or '', row[4] or '', row[5] or '', row[6] or 0, row[7] or 0))
                             count += 1
                         except:
                             pass
                 imported_counts["Fournisseurs"] = count
             
-            # Résumé
+            # 4. Importer Catégories (NEW)
+            if "Categories" in wb.sheetnames:
+                ws = wb["Categories"]
+                count = 0
+                for row in ws.iter_rows(min_row=2, values_only=True):
+                    if row[1] and row[1] != "Aucune catégorie":  # name
+                        try:
+                            db.execute_update("""
+                                INSERT OR IGNORE INTO categories (name, name_ar, description)
+                                VALUES (?, ?, ?)
+                            """, (row[1], row[2] or '', row[3] or ''))
+                            count += 1
+                        except:
+                            pass
+                imported_counts["Categories"] = count
+            
+            # 5. Importer Raccourcis (NEW)
+            if "Raccourcis" in wb.sheetnames:
+                ws = wb["Raccourcis"]
+                count = 0
+                for row in ws.iter_rows(min_row=2, values_only=True):
+                    if row[1] and row[1] != "Aucun raccourci":  # label
+                        try:
+                            db.execute_update("""
+                                INSERT OR IGNORE INTO pos_shortcuts (label, product_id, category_id, price, image_path, position)
+                                VALUES (?, ?, ?, ?, ?, ?)
+                            """, (row[1], row[2] or None, row[3] or None, row[4] or None, row[5] or '', row[6] or 0))
+                            count += 1
+                        except:
+                            pass
+                imported_counts["Raccourcis"] = count
             summary = "\n".join([f"• {k}: {v} enregistrements" for k, v in imported_counts.items()])
             logger.info(f"Restauration depuis: {filename}")
             QMessageBox.information(self, _('title_success'), _('msg_import_success').format(summary))
@@ -436,6 +662,10 @@ class SettingsPage(QWidget):
 
     def reset_all_data(self):
         """Réinitialiser toutes les données de l'application"""
+        if not auth_manager.check_permission('manage_reset'):
+            QMessageBox.warning(self, "Accès refusé", "Vous n'avez pas la permission de réinitialiser l'application.")
+            return
+
         _ = i18n_manager.get
         # Première confirmation
         reply1 = QMessageBox.critical(self, _('group_reset'), 
@@ -460,7 +690,7 @@ class SettingsPage(QWidget):
             QMessageBox.critical(self, _('title_error'), "Utilisateur non connecté")
             return
         
-        success, _, _ = auth_manager.login(current_user['username'], password)
+        success, unused_msg, unused_data = auth_manager.login(current_user['username'], password)
         if not success:
             QMessageBox.critical(self, _('title_error'), "Mot de passe incorrect!")
             return
@@ -475,12 +705,16 @@ class SettingsPage(QWidget):
             tables_to_clear = [
                 'sale_items',
                 'sales',
+                'return_items',
+                'returns',
                 'customer_credit_transactions',
                 'supplier_transactions',
                 'price_history',
                 'products',
                 'customers',
                 'suppliers',
+                'categories',
+                'pos_shortcuts',
                 'audit_log'
             ]
             
@@ -578,8 +812,21 @@ class SettingsPage(QWidget):
         layout.addRow(_('label_store_city'), self.store_city)
         layout.addRow(_('label_store_nif'), self.store_nif)
         layout.addRow(_('label_store_nis'), self.store_nis)
+        layout.addRow(_('label_store_nis'), self.store_nis)
         layout.addRow(_('label_store_rc'), self.store_rc)
         layout.addRow(_('label_store_ai'), self.store_ai)
+        
+        # Expiry Warning Days
+        self.expiry_days_spin = QSpinBox()
+        self.expiry_days_spin.setRange(1, 365)
+        self.expiry_days_spin.setSuffix(" " + _('suffix_days'))
+        # Load current setting
+        expiry_res = db.fetch_one("SELECT setting_value FROM settings WHERE setting_key = 'expiry_warning_days'")
+        current_expiry = int(expiry_res['setting_value']) if expiry_res else 7
+        self.expiry_days_spin.setValue(current_expiry)
+        
+        layout.addRow(_('label_expiry_days'), self.expiry_days_spin)
+        
         layout.addRow(save_btn)
         
         tab.setLayout(layout)
@@ -608,7 +855,9 @@ class SettingsPage(QWidget):
                 'store_nif': config.STORE_CONFIG['tax_id'],
                 'store_nis': config.STORE_CONFIG['nis'],
                 'store_rc': config.STORE_CONFIG['rc'],
-                'store_ai': config.STORE_CONFIG['ai']
+                'store_rc': config.STORE_CONFIG['rc'],
+                'store_ai': config.STORE_CONFIG['ai'],
+                'expiry_warning_days': str(self.expiry_days_spin.value())
             }
             
             for key, value in settings_to_save.items():
@@ -626,6 +875,12 @@ class SettingsPage(QWidget):
         
     def load_users(self):
         """Charger la liste des utilisateurs"""
+        # Fix: Check constraints before accessing table
+        if not auth_manager.is_admin():
+            return
+        if not hasattr(self, 'users_table'):
+            return
+            
         try:
             # Récupérer id, username, full_name, role, et is_active
             query = "SELECT id, username, full_name, role, is_active FROM users WHERE is_active = 1"
@@ -861,6 +1116,7 @@ class SettingsPage(QWidget):
 
     def create_tutorial_tab(self):
         """Onglet tutoriel d'utilisation"""
+        _ = i18n_manager.get
         from PyQt5.QtWidgets import QTextBrowser
         
         tab = QWidget()
@@ -868,44 +1124,7 @@ class SettingsPage(QWidget):
         
         tutorial = QTextBrowser()
         tutorial.setOpenExternalLinks(True)
-        tutorial.setHtml("""
-        <h2>📖 Guide d'utilisation - Gestion Supérette AKHRIB</h2>
-        
-        <h3>🛒 Point de Vente (Caisse)</h3>
-        <ul>
-            <li><b>Scanner un produit</b> : Scannez le code-barres ou tapez-le manuellement</li>
-            <li><b>Rechercher un produit</b> : Tapez le nom dans la barre de recherche</li>
-            <li><b>Sélectionner un client</b> : Tapez pour rechercher ou faites défiler la liste</li>
-            <li><b>Paiement à crédit</b> : Sélectionnez un client puis choisissez "Crédit"</li>
-            <li><b>Raccourci</b> : Appuyez sur <b>F9</b> pour valider le paiement</li>
-        </ul>
-        
-        <h3>📦 Gestion des Produits</h3>
-        <ul>
-            <li><b>Ajouter un produit</b> : Cliquez sur "➕ Nouveau Produit"</li>
-            <li><b>Code-barres optionnel</b> : Si vide, un code sera généré automatiquement</li>
-            <li><b>Imprimer le code-barres</b> : Cliquez sur 🏷️ dans la colonne Actions</li>
-            <li><b>Importer depuis Excel</b> : Utilisez le bouton "📥 Importer"</li>
-        </ul>
-        
-        <h3>👥 Gestion des Clients</h3>
-        <ul>
-            <li><b>Ajouter un client</b> : Dans la page Clients</li>
-            <li><b>Crédit client</b> : Automatiquement mis à jour lors des ventes à crédit</li>
-        </ul>
-        
-        <h3>💾 Sauvegarde des données</h3>
-        <ul>
-            <li><b>Exporter</b> : Paramètres → Données → Créer une Sauvegarde</li>
-            <li><b>Restaurer</b> : Paramètres → Données → Restaurer depuis une Sauvegarde</li>
-        </ul>
-        
-        <h3>🖨️ Impression</h3>
-        <ul>
-            <li><b>Ticket de caisse</b> : Cochez "Imprimer le ticket" avant de payer</li>
-            <li><b>Codes-barres</b> : Page Produits → Bouton 🏷️</li>
-        </ul>
-        """)
+        tutorial.setHtml(_("tutorial_content"))
         
         layout.addWidget(tutorial)
         tab.setLayout(layout)
@@ -973,7 +1192,7 @@ class SettingsPage(QWidget):
         layout.addSpacing(20)
         
         # Copyright
-        copyright_lbl = QLabel("© 2024 - Tous droits réservés")
+        copyright_lbl = QLabel("© 2026- Tous droits réservés")
         copyright_lbl.setStyleSheet("color: #999;")
         copyright_lbl.setAlignment(Qt.AlignCenter)
         layout.addWidget(copyright_lbl)

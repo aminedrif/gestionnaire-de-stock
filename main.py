@@ -36,7 +36,8 @@ def initialize_application():
         # Afficher les compteurs de tables
         for table, count in db_info['table_counts'].items():
             logger.info(f"  - {table}: {count} enregistrement(s)")
-        
+            
+
         logger.info("Application initialisée avec succès")
         return True
         
@@ -44,6 +45,39 @@ def initialize_application():
         logger.critical(f"Erreur lors de l'initialisation: {e}")
         logger.exception("Détails de l'erreur:")
         return False
+
+def load_settings_from_db():
+    """Charger les paramètres depuis la base de données et mettre à jour config.py"""
+    try:
+        # Mapping DB keys -> Config keys
+        mapping = {
+            'store_name': ('store', 'name'),
+            'store_address': ('store', 'address'),
+            'store_city': ('store', 'city'),
+            'store_phone': ('store', 'phone'),
+            'store_email': ('store', 'email'),
+            'store_nif': ('store', 'tax_id'),
+            'store_nis': ('store', 'nis'),
+            'store_rc': ('store', 'rc'),
+            'store_ai': ('store', 'ai'),
+            'tax_rate': ('store', 'tax_rate'),
+            'currency': ('store', 'currency'),
+        }
+        
+        # Fetch all settings
+        rows = db.execute_query("SELECT setting_key, setting_value FROM settings")
+        settings_map = {row['setting_key']: row['setting_value'] for row in rows}
+        
+        for db_key, (section, config_key) in mapping.items():
+            if db_key in settings_map and settings_map[db_key]:
+                # Update config
+                if section == 'store':
+                    config.STORE_CONFIG[config_key] = settings_map[db_key]
+                    
+        logger.info("Configuration chargée depuis la base de données")
+        
+    except Exception as e:
+        logger.error(f"Erreur chargement configuration: {e}")
 
 def main():
     """Fonction principale avec interface PyQt5"""
@@ -55,6 +89,9 @@ def main():
     if not initialize_application():
         print("Erreur lors de l'initialisation de l'application")
         sys.exit(1)
+    
+    # Charger la configuration depuis la base de données
+    load_settings_from_db()
     
     # Créer l'application Qt
     app = QApplication(sys.argv)

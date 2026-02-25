@@ -6,6 +6,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 from database.db_manager import db
 from core.logger import logger
+from core.data_signals import data_signals
 
 
 class CustomerManager:
@@ -45,6 +46,8 @@ class CustomerManager:
                     """
                     db.execute_update(update_query, (phone, email, address, credit_limit, customer_id))
                     logger.info(f"Client réactivé: {full_name} (Code: {existing_code})")
+                    data_signals.customer_added.emit()
+                    data_signals.customers_changed.emit()
                     return True, f"Client réactivé avec succès (Code: {existing_code})", customer_id
 
             # Générer un code client unique
@@ -61,6 +64,8 @@ class CustomerManager:
             ))
             
             logger.info(f"Client créé: {full_name} (Code: {code})")
+            data_signals.customer_added.emit()
+            data_signals.customers_changed.emit()
             return True, f"Client créé avec succès (Code: {code})", customer_id
             
         except Exception as e:
@@ -100,6 +105,8 @@ class CustomerManager:
             
             if rows_affected > 0:
                 logger.info(f"Client mis à jour: ID {customer_id}")
+                data_signals.customer_updated.emit()
+                data_signals.customers_changed.emit()
                 return True, "Client mis à jour avec succès"
             else:
                 return False, "Client introuvable"
@@ -136,6 +143,8 @@ class CustomerManager:
             
             if rows_affected > 0:
                 logger.info(f"Client supprimé: ID {customer_id}")
+                data_signals.customer_deleted.emit()
+                data_signals.customers_changed.emit()
                 return True, "Client supprimé avec succès"
             else:
                 return False, "Client introuvable"
@@ -260,6 +269,8 @@ class CustomerManager:
                 db.commit()
                 
                 logger.info(f"Crédit ajouté: Client {customer_id} - {amount} DA")
+                data_signals.customer_updated.emit()
+                data_signals.customers_changed.emit()
                 return True, f"Crédit ajouté: {amount} DA"
                 
             except Exception as e:
@@ -315,6 +326,8 @@ class CustomerManager:
                 db.commit()
                 
                 logger.info(f"Paiement crédit: Client {customer_id} - {amount} DA")
+                data_signals.customer_updated.emit()
+                data_signals.customers_changed.emit()
                 return True, f"Paiement enregistré: {amount} DA"
                 
             except Exception as e:
@@ -414,6 +427,17 @@ class CustomerManager:
         
         return stats
     
+    def get_total_outstanding_credit(self) -> float:
+        """
+        Calculer le montant total des crédits clients en cours
+        
+        Returns:
+            Montant total du crédit
+        """
+        query = "SELECT SUM(current_credit) as total FROM customers"
+        result = db.fetch_one(query)
+        return float(result['total']) if result and result['total'] else 0.0
+
     def _generate_customer_code(self) -> str:
         """Générer un code client unique"""
         # Obtenir le dernier code

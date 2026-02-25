@@ -141,7 +141,7 @@ class ReceiptGenerator:
     
     def generate_pdf_receipt(self, sale_data: Dict, output_path: Path) -> bool:
         """
-        Générer un ticket en format PDF
+        Générer un ticket en format PDF (80mm x 80mm)
         
         Args:
             sale_data: Données de la vente
@@ -151,114 +151,100 @@ class ReceiptGenerator:
             True si succès
         """
         try:
-            # Créer le PDF
-            c = canvas.Canvas(str(output_path), pagesize=(80*mm, 297*mm))
+            # Créer le PDF - Format ticket 80mm x 80mm
+            c = canvas.Canvas(str(output_path), pagesize=(80*mm, 80*mm))
             
             # Position de départ
-            y = 280 * mm
+            y = 74 * mm
             x_center = 40 * mm
             
             # En-tête
-            c.setFont("Helvetica-Bold", 18)
+            c.setFont("Helvetica-Bold", 12)
             c.drawCentredString(x_center, y, self.store_config['name'])
-            y -= 7 * mm
+            y -= 4.5 * mm
             
-            c.setFont("Helvetica", 8)
+            c.setFont("Helvetica", 6)
             c.drawCentredString(x_center, y, self.store_config['address'])
-            y -= 4 * mm
+            y -= 3 * mm
             c.drawCentredString(x_center, y, self.store_config['phone'])
-            y -= 4 * mm
+            y -= 3 * mm
             
             if self.store_config.get('tax_id'):
                 c.drawCentredString(x_center, y, f"NIF: {self.store_config['tax_id']}")
-                y -= 4 * mm
+                y -= 3 * mm
             if self.store_config.get('nis'):
                 c.drawCentredString(x_center, y, f"NIS: {self.store_config['nis']}")
-                y -= 4 * mm
+                y -= 3 * mm
             if self.store_config.get('rc'):
                 c.drawCentredString(x_center, y, f"RC: {self.store_config['rc']}")
-                y -= 4 * mm
+                y -= 3 * mm
             if self.store_config.get('ai'):
                 c.drawCentredString(x_center, y, f"AI: {self.store_config['ai']}")
-                y -= 4 * mm
+                y -= 3 * mm
             
             # Ligne de séparation
-            y -= 2 * mm
-            c.line(5*mm, y, 75*mm, y)
-            y -= 5 * mm
+            y -= 1 * mm
+            c.line(3*mm, y, 77*mm, y)
+            y -= 3 * mm
             
             # Informations de vente
-            c.setFont("Helvetica", 8)
-            c.drawString(5*mm, y, f"N° Vente: {sale_data['sale_number']}")
-            y -= 4 * mm
-            c.drawString(5*mm, y, f"Date: {sale_data.get('sale_date', datetime.now().strftime('%Y-%m-%d %H:%M'))}")
-            y -= 4 * mm
-            c.drawString(5*mm, y, f"Caissier: {sale_data.get('cashier_name', 'N/A')}")
-            y -= 4 * mm
+            c.setFont("Helvetica", 6)
+            c.drawString(3*mm, y, f"N°: {sale_data['sale_number']}")
+            c.drawRightString(77*mm, y, f"{sale_data.get('sale_date', datetime.now().strftime('%d/%m/%Y %H:%M'))}")
+            y -= 3 * mm
+            c.drawString(3*mm, y, f"Caissier: {sale_data.get('cashier_name', 'N/A')}")
+            y -= 3 * mm
             
             if sale_data.get('customer_name'):
-                c.drawString(5*mm, y, f"Client: {sale_data['customer_name']}")
-                y -= 4 * mm
+                c.drawString(3*mm, y, f"Client: {sale_data['customer_name']}")
+                y -= 3 * mm
             
             # Ligne de séparation
-            y -= 2 * mm
-            c.line(5*mm, y, 75*mm, y)
-            y -= 5 * mm
+            y -= 1 * mm
+            c.line(3*mm, y, 77*mm, y)
+            y -= 3 * mm
             
             # Articles
-            c.setFont("Helvetica-Bold", 9)
-            c.drawString(5*mm, y, "Articles")
-            y -= 5 * mm
-            
-            c.setFont("Helvetica", 7)
+            c.setFont("Helvetica", 6)
             for item in sale_data['items']:
-                # Nom du produit
-                name = item['product_name'][:35]
-                c.drawString(5*mm, y, name)
-                y -= 3.5 * mm
+                name = item['product_name'][:30]
+                c.drawString(3*mm, y, name)
+                y -= 2.5 * mm
                 
-                # Quantité, prix unitaire et total
-                qty_price = f"{item['quantity']} x {item['unit_price']:.2f} DA"
+                qty_price = f"{item['quantity']} x {item['unit_price']:.2f}"
                 total_str = f"{item['subtotal']:.2f} DA"
+                c.drawString(5*mm, y, qty_price)
+                c.drawRightString(77*mm, y, total_str)
+                y -= 3 * mm
                 
-                c.drawString(8*mm, y, qty_price)
-                c.drawRightString(75*mm, y, total_str)
-                y -= 4 * mm
-                
-                # Réduction si applicable
                 if item.get('discount_percentage', 0) > 0:
-                    c.drawString(10*mm, y, f"Promo: -{item['discount_percentage']}%")
-                    y -= 3.5 * mm
+                    c.drawString(5*mm, y, f"Promo: -{item['discount_percentage']}%")
+                    y -= 2.5 * mm
             
             # Ligne de séparation
-            y -= 2 * mm
-            c.line(5*mm, y, 75*mm, y)
-            y -= 5 * mm
+            y -= 1 * mm
+            c.line(3*mm, y, 77*mm, y)
+            y -= 3 * mm
             
             # Totaux
-            c.setFont("Helvetica", 9)
-            c.drawString(5*mm, y, "Sous-total:")
-            c.drawRightString(75*mm, y, f"{sale_data['subtotal']:.2f} DA")
-            y -= 4 * mm
+            c.setFont("Helvetica", 7)
+            c.drawString(3*mm, y, "Sous-total:")
+            c.drawRightString(77*mm, y, f"{sale_data['subtotal']:.2f} DA")
+            y -= 3 * mm
             
             if sale_data.get('discount_amount', 0) > 0:
-                c.drawString(5*mm, y, "Réduction:")
-                c.drawRightString(75*mm, y, f"-{sale_data['discount_amount']:.2f} DA")
-                y -= 4 * mm
+                c.drawString(3*mm, y, "Réduction:")
+                c.drawRightString(77*mm, y, f"-{sale_data['discount_amount']:.2f} DA")
+                y -= 3 * mm
             
             # Total
-            y -= 1 * mm
-            c.setFont("Helvetica-Bold", 11)
-            c.drawString(5*mm, y, "TOTAL:")
-            c.drawRightString(75*mm, y, f"{sale_data['total_amount']:.2f} DA")
-            y -= 6 * mm
-            
-            # Ligne de séparation
-            c.line(5*mm, y, 75*mm, y)
-            y -= 5 * mm
+            c.setFont("Helvetica-Bold", 9)
+            c.drawString(3*mm, y, "TOTAL:")
+            c.drawRightString(77*mm, y, f"{sale_data['total_amount']:.2f} DA")
+            y -= 4 * mm
             
             # Paiement
-            c.setFont("Helvetica", 8)
+            c.setFont("Helvetica", 6)
             payment_method = sale_data.get('payment_method', 'cash')
             payment_labels = {
                 'cash': 'Espèces',
@@ -267,33 +253,28 @@ class ReceiptGenerator:
                 'mixed': 'Mixte'
             }
             
-            c.drawString(5*mm, y, f"Mode de paiement: {payment_labels.get(payment_method, payment_method)}")
-            y -= 4 * mm
+            c.drawString(3*mm, y, f"Mode: {payment_labels.get(payment_method, payment_method)}")
+            y -= 3 * mm
             
             if payment_method != 'credit':
                 paid = sale_data.get('amount_paid', sale_data['total_amount'])
                 change = sale_data.get('change_amount', 0)
                 
-                c.drawString(5*mm, y, "Payé:")
-                c.drawRightString(75*mm, y, f"{paid:.2f} DA")
-                y -= 4 * mm
-                
+                c.drawString(3*mm, y, f"Payé: {paid:.2f} DA")
                 if change > 0:
-                    c.drawString(5*mm, y, "Rendu:")
-                    c.drawRightString(75*mm, y, f"{change:.2f} DA")
-                    y -= 4 * mm
+                    c.drawRightString(77*mm, y, f"Rendu: {change:.2f} DA")
+                y -= 3 * mm
             
             # Pied de page
-            y -= 5 * mm
-            c.setFont("Helvetica-Bold", 9)
+            y -= 2 * mm
+            c.setFont("Helvetica", 6)
             footer_msg = config.DEFAULT_MESSAGES.get(self.language, {}).get(
                 'receipt_footer', 'Merci pour votre visite !'
             )
             c.drawCentredString(x_center, y, footer_msg)
-            y -= 5 * mm
-            
-            c.setFont("Helvetica", 7)
-            c.drawCentredString(x_center, y, datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+            y -= 3 * mm
+            c.setFont("Helvetica", 5)
+            c.drawCentredString(x_center, y, datetime.now().strftime('%d/%m/%Y %H:%M:%S'))
             
             # Sauvegarder le PDF
             c.save()
@@ -471,6 +452,290 @@ class ReceiptGenerator:
         """
         
         return html
+
+    def generate_return_text_receipt(self, return_data: Dict) -> str:
+        """
+        Générer un ticket de RETOUR en format texte
+        """
+        lines = []
+        width = 42
+        
+        # En-tête
+        lines.append("=" * width)
+        lines.append(self.store_config['name'].center(width))
+        lines.append("TICKET DE RETOUR".center(width))
+        lines.append("=" * width)
+        lines.append("")
+        
+        # Infos Retour
+        lines.append(f"N° Retour: {return_data['return_number']}")
+        lines.append(f"Origine: {return_data.get('original_sale_number', 'N/A')}")
+        lines.append(f"Date: {return_data.get('return_date', datetime.now().strftime('%Y-%m-%d %H:%M'))}")
+        lines.append(f"Caissier: {return_data.get('cashier_name', 'N/A')}")
+        if return_data.get('customer_name'):
+            lines.append(f"Client: {return_data['customer_name']}")
+        
+        lines.append("-" * width)
+        lines.append("Articles Retournés:")
+        lines.append("-" * width)
+        
+        for item in return_data['items']:
+            name = item['product_name'][:30]
+            # Utiliser quantity_returned si disponible, sinon quantity (compatibilité)
+            qty = item.get('quantity_returned', item.get('quantity', 0))
+            price = item['unit_price']
+            # Utiliser subtotal (nom dans return_items) ou return_amount
+            total = item.get('subtotal', item.get('return_amount', 0)) 
+            
+            lines.append(name)
+            qty_price = f"{qty} x {price:.2f} DA"
+            total_str = f"-{total:.2f} DA" # Montant négatif pour indiquer remboursement
+            
+            spacing = width - len(qty_price) - len(total_str)
+            lines.append(f"{qty_price}{' ' * spacing}{total_str}")
+            lines.append("")
+            
+        lines.append("-" * width)
+        
+        # Total
+        total_refund = return_data['return_amount']
+        lines.append("=" * width)
+        lines.append(f"TOTAL REMBOURSÉ:{' ' * (width - 25)}-{total_refund:.2f} DA")
+        lines.append("=" * width)
+        lines.append("")
+        
+        # Raison
+        if return_data.get('reason'):
+            lines.append(f"Raison: {return_data['reason']}")
+            lines.append("")
+            
+        lines.append(datetime.now().strftime('%Y-%m-%d %H:%M:%S').center(width))
+        lines.append("=" * width)
+        
+        return "\n".join(lines)
+
+    def generate_return_html_receipt(self, return_data: Dict) -> str:
+        """
+        Générer un ticket de RETOUR en HTML
+        """
+        html = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <style>
+                body {{
+                    font-family: 'Courier New', monospace;
+                    width: 300px;
+                    margin: 20px auto;
+                    padding: 10px;
+                    border: 1px solid #ef4444; /* Bordure rouge pour retour */
+                    background-color: #fef2f2;
+                }}
+                .header {{
+                    text-align: center;
+                    font-weight: bold;
+                    margin-bottom: 10px;
+                }}
+                .title {{
+                    font-size: 1.2em;
+                    color: #dc2626;
+                    margin: 5px 0;
+                }}
+                .separator {{
+                    border-top: 1px dashed #000;
+                    margin: 10px 0;
+                }}
+                .item {{ margin: 5px 0; }}
+                .item-details {{
+                    display: flex;
+                    justify-content: space-between;
+                    font-size: 0.9em;
+                }}
+                .total-line {{
+                    display: flex;
+                    justify-content: space-between;
+                    font-weight: bold;
+                    font-size: 1.2em;
+                    color: #dc2626;
+                    border-top: 2px solid #000;
+                    padding-top: 5px;
+                    margin-top: 10px;
+                }}
+                .footer {{
+                    text-align: center;
+                    margin-top: 15px;
+                    font-size: 0.8em;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <div>{self.store_config['name']}</div>
+                <div class="title">TICKET DE RETOUR</div>
+            </div>
+            
+            <div class="separator"></div>
+            
+            <div>
+                <div>N° Retour: {return_data['return_number']}</div>
+                <div>Origine: {return_data.get('original_sale_number', 'N/A')}</div>
+                <div>Date: {return_data.get('return_date', datetime.now().strftime('%Y-%m-%d %H:%M'))}</div>
+                <div>Caissier: {return_data.get('cashier_name', 'N/A')}</div>
+                {'<div>Client: ' + return_data.get('customer_name', '') + '</div>' if return_data.get('customer_name') else ''}
+            </div>
+            
+            <div class="separator"></div>
+            
+            <div>
+                <strong>Articles Retournés:</strong>
+        """
+        
+        for item in return_data['items']:
+            # Utiliser quantity_returned si disponible
+            qty = item.get('quantity_returned', item.get('quantity', 0))
+            # Utiliser subtotal si disponible
+            item_total = item.get('subtotal', item.get('return_amount', 0))
+            
+            html += f"""
+                <div class="item">
+                    <div>{item['product_name']}</div>
+                    <div class="item-details">
+                        <span>{qty} x {item['unit_price']:.2f} DA</span>
+                        <span>-{item_total:.2f} DA</span>
+                    </div>
+                </div>
+            """
+            
+        html += f"""
+            </div>
+            
+            <div class="total-line">
+                <span>TOTAL REMBOURSÉ:</span>
+                <span>-{return_data['return_amount']:.2f} DA</span>
+            </div>
+            
+            <div class="separator"></div>
+            
+            <div>
+                <div>Raison: {return_data.get('reason', 'N/A')}</div>
+            </div>
+            
+            <div class="footer">
+                <div>{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</div>
+            </div>
+        </body>
+        </html>
+        """
+        return html
+
+    def generate_return_pdf_receipt(self, return_data: Dict, output_path: Path) -> bool:
+        """
+        Générer un ticket de RETOUR en PDF
+        
+        Args:
+            return_data: Données du retour
+            output_path: Chemin du fichier PDF
+            
+        Returns:
+            True si succès
+        """
+        try:
+            # Créer le PDF
+            c = canvas.Canvas(str(output_path), pagesize=(80*mm, 297*mm))
+            
+            # Position de départ
+            y = 280 * mm
+            x_center = 40 * mm
+            
+            # En-tête
+            c.setFont("Helvetica-Bold", 18)
+            c.drawCentredString(x_center, y, self.store_config['name'])
+            y -= 7 * mm
+            
+            c.setFont("Helvetica-Bold", 14)
+            c.drawCentredString(x_center, y, "TICKET DE RETOUR")
+            y -= 10 * mm
+            
+            # Ligne de séparation
+            c.line(5*mm, y, 75*mm, y)
+            y -= 5 * mm
+            
+            # Informations
+            c.setFont("Helvetica", 8)
+            c.drawString(5*mm, y, f"N° Retour: {return_data['return_number']}")
+            y -= 4 * mm
+            c.drawString(5*mm, y, f"Origine: {return_data.get('original_sale_number', 'N/A')}")
+            y -= 4 * mm
+            c.drawString(5*mm, y, f"Date: {return_data.get('return_date', datetime.now().strftime('%Y-%m-%d %H:%M'))}")
+            y -= 4 * mm
+            c.drawString(5*mm, y, f"Caissier: {return_data.get('cashier_name', 'N/A')}")
+            y -= 4 * mm
+            
+            if return_data.get('customer_name'):
+                c.drawString(5*mm, y, f"Client: {return_data['customer_name']}")
+                y -= 4 * mm
+            
+            # Ligne de séparation
+            y -= 2 * mm
+            c.line(5*mm, y, 75*mm, y)
+            y -= 5 * mm
+            
+            # Articles
+            c.setFont("Helvetica-Bold", 9)
+            c.drawString(5*mm, y, "Articles Retournés")
+            y -= 5 * mm
+            
+            c.setFont("Helvetica", 7)
+            for item in return_data['items']:
+                # Nom du produit
+                name = item['product_name'][:35]
+                c.drawString(5*mm, y, name)
+                y -= 3.5 * mm
+                
+                # Quantité, prix unitaire et total
+                # Utiliser quantity_returned si disponible
+                qty = item.get('quantity_returned', item.get('quantity', 0))
+                # Utiliser subtotal si disponible
+                item_total = item.get('subtotal', item.get('return_amount', 0))
+                
+                qty_price = f"{qty} x {item['unit_price']:.2f} DA"
+                total_str = f"-{item_total:.2f} DA"
+                
+                c.drawString(8*mm, y, qty_price)
+                c.drawRightString(75*mm, y, total_str)
+                y -= 4 * mm
+            
+            # Ligne de séparation
+            y -= 2 * mm
+            c.line(5*mm, y, 75*mm, y)
+            y -= 5 * mm
+            
+            # Totaux
+            y -= 1 * mm
+            c.setFont("Helvetica-Bold", 11)
+            c.drawString(5*mm, y, "TOTAL REMBOURSÉ:")
+            c.drawRightString(75*mm, y, f"-{return_data['return_amount']:.2f} DA")
+            y -= 6 * mm
+            
+            # Raison
+            if return_data.get('reason'):
+                c.setFont("Helvetica", 8)
+                c.drawString(5*mm, y, f"Raison: {return_data['reason']}")
+                y -= 5 * mm
+            
+            # Pied de page
+            y -= 10 * mm
+            c.setFont("Helvetica", 7)
+            c.drawCentredString(x_center, y, datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+            
+            # Sauvegarder le PDF
+            c.save()
+            return True
+            
+        except Exception as e:
+            print(f"Erreur lors de la génération du PDF retour: {e}")
+            return False
 
 
 # Instance globale

@@ -100,6 +100,20 @@ class DatabaseManager:
                 cursor.execute("ALTER TABLE suppliers ADD COLUMN total_debt REAL DEFAULT 0.0")
                 print("✓ Migration: Ajout colonne total_debt à suppliers")
                 
+            # Ensure placeholder product for Custom Items (ID 0)
+            # This is critical for shortcuts/custom items to avoid Foreign Key errors
+            cursor.execute("SELECT id FROM products WHERE id = 0")
+            if not cursor.fetchone():
+                try:
+                    # Insert explicit ID 0
+                    cursor.execute("""
+                        INSERT INTO products (id, name, barcode, selling_price, purchase_price, stock_quantity, is_active)
+                        VALUES (0, 'Article Divers', 'CUSTOM_ITEM', 0, 0, 999999, 1)
+                    """)
+                    print("✓ Migration: Ajout produit placeholder (ID 0)")
+                except sqlite3.Error as e:
+                    print(f"⚠ Erreur insertion placeholder product: {e}")
+            
             # Check and add total_purchases to customers if missing
             cursor.execute("PRAGMA table_info(customers)")
             columns = [col[1] for col in cursor.fetchall()]
@@ -140,9 +154,83 @@ class DatabaseManager:
             """)
             print("✓ Migration: Verification table license")
             
+            # Create pos_shortcuts table if not exists with category_id
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS pos_shortcuts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    product_id INTEGER,
+                    label TEXT NOT NULL,
+                    image_path TEXT,
+                    unit_price REAL NOT NULL,
+                    position INTEGER NOT NULL,
+                    category_id INTEGER,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+                    FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
+                )
+            """)
+            
+            # Migration: Ensure category_id exists in pos_shortcuts
+            cursor.execute("PRAGMA table_info(pos_shortcuts)")
+            columns = [info[1] for info in cursor.fetchall()]
+            if 'category_id' not in columns:
+                cursor.execute("ALTER TABLE pos_shortcuts ADD COLUMN category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL")
+                print("✓ Migration: Added category_id to pos_shortcuts")
+
+            # Migration: Ensure category_id exists in sale_items
+            cursor.execute("PRAGMA table_info(sale_items)")
+            columns = [info[1] for info in cursor.fetchall()]
+            if 'category_id' not in columns:
+                cursor.execute("ALTER TABLE sale_items ADD COLUMN category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL")
+                print("✓ Migration: Added category_id to sale_items")
+            
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_pos_shortcuts_position ON pos_shortcuts(position)
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_pos_shortcuts_category ON pos_shortcuts(category_id)")
+             
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_pos_shortcuts_product ON pos_shortcuts(product_id)
+            """)
+            
+            cursor.execute("""
+                CREATE TRIGGER IF NOT EXISTS update_pos_shortcuts_timestamp 
+                AFTER UPDATE ON pos_shortcuts
+                BEGIN
+                    UPDATE pos_shortcuts SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+                END
+            """)
+            print("✓ Migration: Verification table pos_shortcuts")
+            
+            # ================================================================
+            # TOBACCO CONTROL MIGRATION
+            # ================================================================
+            cursor.execute("PRAGMA table_info(products)")
+            columns = [col[1] for col in cursor.fetchall()]
+            
+            # Add is_tobacco flag for reporting separation
+            if 'is_tobacco' not in columns:
+                cursor.execute("ALTER TABLE products ADD COLUMN is_tobacco INTEGER DEFAULT 0")
+                print("✓ Migration: Added is_tobacco to products")
+            
+            # Add parent_product_id for unit conversion (Single -> Pack link)
+            if 'parent_product_id' not in columns:
+                cursor.execute("ALTER TABLE products ADD COLUMN parent_product_id INTEGER REFERENCES products(id) ON DELETE SET NULL")
+                print("✓ Migration: Added parent_product_id to products")
+            
+            # Add packing_quantity (how many singles in a pack, default 20 for cigarettes)
+            if 'packing_quantity' not in columns:
+                cursor.execute("ALTER TABLE products ADD COLUMN packing_quantity INTEGER DEFAULT 20")
+                print("✓ Migration: Added packing_quantity to products")
+            
+
+            
             conn.commit()
         except sqlite3.Error as e:
             print(f"⚠ Migration warning: {e}")
+    
+
     
     def execute_query(self, query: str, params: tuple = ()) -> List[sqlite3.Row]:
         """

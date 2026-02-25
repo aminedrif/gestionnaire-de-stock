@@ -13,6 +13,7 @@ from modules.customers.customer_manager import customer_manager
 from core.auth import auth_manager
 from core.logger import logger
 from core.i18n import i18n_manager
+from core.data_signals import data_signals
 
 class CustomerFormDialog(QDialog):
     """Dialogue d'ajout/modification de client"""
@@ -204,6 +205,122 @@ class PaymentDialog(QDialog):
         except Exception as e:
             logger.warning(f"Erreur impression reçu paiement: {e}")
 
+class CustomerHistoryDialog(QDialog):
+    """Dialogue d'historique client (Crédits & Achats)"""
+    
+    def __init__(self, customer, parent=None):
+        super().__init__(parent)
+        self.customer = customer
+        _ = i18n_manager.get
+        self.setWindowTitle(_("history_title_customer").format(self.customer['full_name']))
+        self.setMinimumWidth(800)
+        self.setMinimumHeight(600)
+        self.setup_ui()
+        
+    def setup_ui(self):
+        _ = i18n_manager.get
+        layout = QVBoxLayout()
+        
+        # Info Client Header
+        header = QFrame()
+        header.setStyleSheet("background-color: #f8f9fa; border-radius: 8px; padding: 10px;")
+        h_layout = QHBoxLayout(header)
+        
+        info_l = QLabel(f"<b>{self.customer['full_name']}</b><br>Code: {self.customer['code']}")
+        info_l.setStyleSheet("font-size: 16px; color: #2c3e50;")
+        
+        credit_l = QLabel(f"{_('label_current_debt')}: <b>{self.customer.get('current_credit', 0)} DA</b>")
+        credit_l.setStyleSheet("font-size: 16px; color: #e74c3c;")
+        
+        h_layout.addWidget(info_l)
+        h_layout.addStretch()
+        h_layout.addWidget(credit_l)
+        layout.addWidget(header)
+        
+        # Tabs
+        self.tabs = QTabWidget()
+        self.tabs.addTab(self.create_financial_tab(), "💰 " + _("tab_financial_history"))
+        self.tabs.addTab(self.create_purchase_tab(), "🛒 " + _("tab_purchase_history"))
+        layout.addWidget(self.tabs)
+        
+        # Close Button
+        close_btn = QPushButton(_("btn_close"))
+        close_btn.clicked.connect(self.accept)
+        close_btn.setStyleSheet("min-width: 100px; padding: 8px;")
+        
+        btn_layout = QHBoxLayout()
+        btn_layout.addStretch()
+        btn_layout.addWidget(close_btn)
+        layout.addLayout(btn_layout)
+        
+        self.setLayout(layout)
+        
+    def create_financial_tab(self):
+        """Create tab for credit/payment history"""
+        _ = i18n_manager.get
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # Table
+        table = QTableWidget()
+        table.setColumnCount(5)
+        table.setHorizontalHeaderLabels([
+            _("col_date"), _("col_type"), _("col_amount"), _("col_notes"), _("col_user")
+        ])
+        table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
+        
+        # Load Data
+        transactions = customer_manager.get_credit_history(self.customer['id'])
+        table.setRowCount(len(transactions))
+        
+        for i, t in enumerate(transactions):
+            table.setItem(i, 0, QTableWidgetItem(t['transaction_date']))
+            
+            # Type & Color
+            t_type = t['transaction_type']
+            type_str = _("type_payment") if t_type == 'payment' else _("type_credit")
+            type_item = QTableWidgetItem(type_str)
+            if t_type == 'payment':
+                type_item.setForeground(QColor("green"))
+            else:
+                type_item.setForeground(QColor("red"))
+            table.setItem(i, 1, type_item)
+            
+            table.setItem(i, 2, QTableWidgetItem(f"{t['amount']} DA"))
+            table.setItem(i, 3, QTableWidgetItem(str(t.get('notes') or '')))
+            table.setItem(i, 4, QTableWidgetItem(str(t.get('processed_by_name') or '')))
+            
+        layout.addWidget(table)
+        return widget
+
+    def create_purchase_tab(self):
+        """Create tab for sales history"""
+        _ = i18n_manager.get
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        
+        # Table
+        table = QTableWidget()
+        table.setColumnCount(5)
+        table.setHorizontalHeaderLabels([
+            _("col_date"), _("col_sale_no"), _("col_total"), _("col_payment_method"), _("col_cashier")
+        ])
+        table.horizontalHeader().setSectionResizeMode(4, QHeaderView.Stretch)
+        
+        # Load Data
+        sales = customer_manager.get_purchase_history(self.customer['id'], limit=100)
+        table.setRowCount(len(sales))
+        
+        for i, s in enumerate(sales):
+            table.setItem(i, 0, QTableWidgetItem(s['sale_date']))
+            table.setItem(i, 1, QTableWidgetItem(s['sale_number']))
+            table.setItem(i, 2, QTableWidgetItem(f"{s['total_amount']} DA"))
+            table.setItem(i, 3, QTableWidgetItem(s['payment_method']))
+            table.setItem(i, 4, QTableWidgetItem(str(s.get('cashier_name') or '')))
+            
+        layout.addWidget(table)
+        return widget
+
 class CustomersPage(QWidget):
     """Page de gestion des clients"""
     navigate_to = pyqtSignal(str, dict) # Pour naviguer vers l'historique avec un filtre
@@ -214,10 +331,49 @@ class CustomersPage(QWidget):
         self.load_customers()
         
         i18n_manager.language_changed.connect(self.update_ui_text)
+        data_signals.customers_changed.connect(self.load_customers)
         self.update_ui_text()
         
     def init_ui(self):
-        layout = QVBoxLayout()
+        # Create a main layout if it doesn't exist
+        if not self.layout():
+            layout = QVBoxLayout()
+            layout.setContentsMargins(0, 0, 0, 0)
+            self.setLayout(layout)
+        
+        # Create fresh container
+        self.container = QWidget()
+        self.layout().addWidget(self.container)
+        
+        # Build UI inside container
+        self.build_ui_content(self.container)
+
+    def update_ui_text(self):
+        """Mettre à jour les textes de l'interface"""
+        # Remove old container
+        if hasattr(self, 'container'):
+            if self.layout():
+                self.layout().removeWidget(self.container)
+            self.container.deleteLater()
+        
+        # Create new container
+        self.container = QWidget()
+        self.layout().addWidget(self.container)
+        
+        # Update layout direction
+        if i18n_manager.is_rtl():
+             self.setLayoutDirection(Qt.RightToLeft)
+        else:
+             self.setLayoutDirection(Qt.LeftToRight)
+        
+        # Rebuild UI
+        self.build_ui_content(self.container)
+        
+        # Reload Data
+        self.load_customers()
+
+    def build_ui_content(self, parent_widget):
+        layout = QVBoxLayout(parent_widget)
         layout.setSpacing(15)
         
         _ = i18n_manager.get
@@ -236,13 +392,13 @@ class CustomersPage(QWidget):
         header_layout = QHBoxLayout(header_frame)
         
         title_layout = QVBoxLayout()
-        self.header = QLabel(_("customers_title"))
-        self.header.setStyleSheet("font-size: 24px; font-weight: bold; color: white; background: transparent;")
-        title_layout.addWidget(self.header)
+        header_lbl = QLabel(_("customers_title"))
+        header_lbl.setStyleSheet("font-size: 24px; font-weight: bold; color: white; background: transparent;")
+        title_layout.addWidget(header_lbl)
         
-        self.subtitle = QLabel(_("customers_subtitle"))
-        self.subtitle.setStyleSheet("font-size: 14px; color: rgba(255,255,255,0.9); background: transparent;")
-        title_layout.addWidget(self.subtitle)
+        subtitle_lbl = QLabel(_("customers_subtitle"))
+        subtitle_lbl.setStyleSheet("font-size: 14px; color: rgba(255,255,255,0.9); background: transparent;")
+        title_layout.addWidget(subtitle_lbl)
         
         header_layout.addLayout(title_layout)
         header_layout.addStretch()
@@ -360,50 +516,7 @@ class CustomersPage(QWidget):
         """)
 
         layout.addWidget(self.table)
-        
-        self.setLayout(layout)
-        
-    def update_ui_text(self):
-        """Mettre à jour les textes de l'interface"""
-        _ = i18n_manager.get
-        is_rtl = i18n_manager.is_rtl()
-        
-        self.setLayoutDirection(Qt.RightToLeft if is_rtl else Qt.LeftToRight)
-        
-        self.header.setText(_("customers_title"))
-        self.subtitle.setText(_("customers_subtitle"))
-        self.search_input.setPlaceholderText(_("placeholder_search_customer"))
-        
-        # Update filter combo items while preserving selection
-        current_idx = self.filter_combo.currentIndex()
-        self.filter_combo.setItemText(0, _("filter_all_customers"))
-        self.filter_combo.setItemText(1, _("filter_with_debt"))
-        self.filter_combo.setItemText(2, _("filter_best_customers"))
-        self.filter_combo.setCurrentIndex(current_idx)
-        
-        self.new_btn.setText(_("btn_new_customer"))
-        self.table.setHorizontalHeaderLabels(_("table_headers_customers"))
-        
-        # Update action button tooltips in existing table rows
-        for row in range(self.table.rowCount()):
-            # Update button tooltips without reloading entire table
-            btn_widget = self.table.cellWidget(row, 5) # Actions are in column 5
-            if btn_widget and hasattr(btn_widget, 'layout'):
-                layout = btn_widget.layout()
-                if layout and layout.count() >= 4: # There are 4 buttons: edit, pay, delete, history
-                    edit_btn = layout.itemAt(0).widget()
-                    pay_btn = layout.itemAt(1).widget()
-                    delete_btn = layout.itemAt(2).widget()
-                    hist_btn = layout.itemAt(3).widget() # History button
 
-                    if edit_btn:
-                        edit_btn.setToolTip(_("tooltip_edit"))
-                    if pay_btn:
-                        pay_btn.setToolTip(_("tooltip_pay_debt"))
-                    if delete_btn:
-                        delete_btn.setToolTip(_("tooltip_delete"))
-                    if hist_btn:
-                        hist_btn.setToolTip(_("tooltip_history"))
         
     def load_customers(self):
         _ = i18n_manager.get
@@ -449,33 +562,50 @@ class CustomersPage(QWidget):
             # Actions
             widget = QWidget()
             hbox = QHBoxLayout(widget)
-            hbox.setContentsMargins(0, 0, 0, 0)
+            hbox.setContentsMargins(5, 0, 5, 0)
+            hbox.setSpacing(5)
             
-            edit_btn = QPushButton(_("btn_edit"))
-            edit_btn.setToolTip(_("tooltip_edit"))
+            # Helper for styled buttons
+            def make_btn(text, tooltip, color, hover_bg):
+                btn = QPushButton(text)
+                btn.setToolTip(tooltip)
+                btn.setFixedSize(35, 35)
+                btn.setCursor(Qt.PointingHandCursor)
+                btn.setStyleSheet(f"""
+                    QPushButton {{
+                        background-color: transparent;
+                        border: 1px solid #e5e7eb;
+                        border-radius: 6px;
+                        color: {color};
+                        font-size: 16px;
+                    }}
+                    QPushButton:hover {{
+                        background-color: {hover_bg};
+                        border-color: {color};
+                    }}
+                """)
+                return btn
+
+            edit_btn = make_btn("✏️", _("tooltip_edit"), "#3b82f6", "#eff6ff")
             edit_btn.clicked.connect(lambda checked, x=c: self.open_edit_dialog(x))
             hbox.addWidget(edit_btn)
             
-            pay_btn = QPushButton(_("btn_pay_debt"))
-            pay_btn.setToolTip(_("tooltip_pay_debt"))
-            pay_btn.setStyleSheet("color: green;")
+            pay_btn = make_btn("💰", _("tooltip_pay_debt"), "#10b981", "#ecfdf5")
             pay_btn.clicked.connect(lambda checked, x=c: self.open_payment_dialog(x))
             hbox.addWidget(pay_btn)
             
-            # Delete button
-            del_btn = QPushButton(_("btn_delete"))
-            del_btn.setToolTip(_("tooltip_delete"))
-            del_btn.setStyleSheet("color: red;")
+            hist_btn = make_btn("📜", _("tooltip_history"), "#6b7280", "#f3f4f6")
+            hist_btn.clicked.connect(lambda checked, x=c: self.open_history_dialog(x))
+            hbox.addWidget(hist_btn)
+            
+            del_btn = make_btn("🗑️", _("tooltip_delete"), "#ef4444", "#fef2f2")
             del_btn.clicked.connect(lambda checked, x=c['id']: self.delete_customer(x))
             hbox.addWidget(del_btn)
             
-            # History button
-            hist_btn = QPushButton(_("btn_history"))
-            hist_btn.setToolTip(_("tooltip_history"))
-            hist_btn.clicked.connect(lambda checked, x=c['full_name']: self.open_history(x))
-            hbox.addWidget(hist_btn)
-                
             self.table.setCellWidget(row, 5, widget)
+            
+        # Adjust column width for actions
+        self.table.setColumnWidth(5, 180)
             
     def open_new_dialog(self):
         if CustomerFormDialog(parent=self).exec_():
@@ -504,8 +634,15 @@ class CustomersPage(QWidget):
                 QMessageBox.warning(self, _("msg_delete_error"), msg)
 
     def open_history(self, customer_name):
-        """Naviguer vers l'historique filtré"""
-        self.navigate_to.emit("history", {"filter_customer": customer_name})
+        """Ouvrir le dialogue d'historique pour ce client"""
+        # Find customer object first (since we only got name passed in lambda)
+        # Ideally we should pass the whole object, let's fix the lambda in load_customers
+        pass 
+        
+    def open_history_dialog(self, customer):
+        """Nouvelle méthode pour ouvrir le dialogue dédié"""
+        dialog = CustomerHistoryDialog(customer, parent=self)
+        dialog.exec_()
 
     def refresh(self):
         """Rafraîchir les données"""

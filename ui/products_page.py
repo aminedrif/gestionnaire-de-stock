@@ -6,14 +6,17 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                              QPushButton, QLineEdit, QTableWidget, QTableWidgetItem,
                              QComboBox, QFrame, QMessageBox, QHeaderView, QDialog,
                              QFormLayout, QSpinBox, QDoubleSpinBox, QDateEdit,
-                             QCheckBox, QTabWidget, QGroupBox, QMenu, QAbstractItemView)
+                             QCheckBox, QTabWidget, QGroupBox, QMenu, QAbstractItemView, QCompleter)
+
 from PyQt5.QtCore import Qt, QDate
 from PyQt5.QtGui import QColor, QBrush
 from modules.products.product_manager import product_manager
+from modules.products.category_manager import category_manager
 from modules.suppliers.supplier_manager import supplier_manager
 from modules.reports.reorder_report import generate_reorder_report
 from core.logger import logger
 from core.i18n import i18n_manager
+from core.data_signals import data_signals
 
 class ProductFormDialog(QDialog):
     """Dialogue d'ajout/modification de produit"""
@@ -25,6 +28,7 @@ class ProductFormDialog(QDialog):
         self.setWindowTitle(_("product_dialog_new") if not product else _("product_dialog_edit"))
         self.setMinimumWidth(500)
         self.suppliers = supplier_manager.get_all_suppliers()
+        self.categories = category_manager.get_all_categories()
         self.setup_ui()
         
     def setup_ui(self):
@@ -41,9 +45,24 @@ class ProductFormDialog(QDialog):
         self.barcode_edit = QLineEdit()
         self.name_edit = QLineEdit()
         self.name_ar_edit = QLineEdit()
-        self.category_combo = QComboBox() # TODO: Charger les catégories
+        self.category_combo = QComboBox()
+        self.category_combo.setEditable(True)
+        self.category_combo.setInsertPolicy(QComboBox.NoInsert)
+        self.category_combo.completer().setCompletionMode(QCompleter.PopupCompletion)
+        
+        # Fill Categories
+        self.category_combo.addItem("", None)
+        is_arabic = i18n_manager.current_language == 'ar'
+        for c in self.categories:
+            # Display Arabic name if in Arabic mode and available, else French name
+            display_name = c['name_ar'] if is_arabic and c.get('name_ar') else c['name']
+            self.category_combo.addItem(display_name, c['id'])
+            
         self.supplier_combo = QComboBox()
-        self.supplier_combo.addItem(_("combo_no_supplier"), None)
+        self.supplier_combo.setEditable(True)
+        self.supplier_combo.setInsertPolicy(QComboBox.NoInsert)
+        self.supplier_combo.completer().setCompletionMode(QCompleter.PopupCompletion)
+        self.supplier_combo.addItem("", None)
         for s in self.suppliers:
             self.supplier_combo.addItem(s['company_name'], s['id'])
             
@@ -52,6 +71,7 @@ class ProductFormDialog(QDialog):
         form_layout.addRow(_("label_barcode"), self.barcode_edit)
         form_layout.addRow(_("label_fullname"), self.name_edit)
         form_layout.addRow(_("label_name_ar"), self.name_ar_edit)
+        form_layout.addRow(_("label_category"), self.category_combo)
         form_layout.addRow(_("label_supplier"), self.supplier_combo)
         form_layout.addRow(_("label_description"), self.description_edit)
         # form_layout.addRow("Catégorie:", self.category_combo)
@@ -95,6 +115,33 @@ class ProductFormDialog(QDialog):
         
         price_tab.setLayout(price_layout)
         tabs.addTab(price_tab, _("tab_price_stock"))
+
+        # Section Création Unitaire (Déplacé ici)
+        price_layout.addRow(QLabel(""))
+        price_layout.addRow(QLabel(f"<b>{_('section_auto_create')}</b>"))
+        
+        # Auto-create unit checkbox (only for NEW products)
+        self.auto_create_unit_check = QCheckBox(_("checkbox_auto_create"))
+        self.auto_create_unit_check.setToolTip(_("checkbox_auto_create"))
+        self.auto_create_unit_check.toggled.connect(self._toggle_unit_fields)
+        price_layout.addRow(self.auto_create_unit_check)
+        
+        # Unit price field
+        self.unit_price_spin = QDoubleSpinBox()
+        self.unit_price_spin.setRange(0, 100000)
+        self.unit_price_spin.setSuffix(" DA")
+        self.unit_price_spin.setDecimals(2)
+        self.unit_price_spin.setEnabled(False)
+        price_layout.addRow(_("label_unit_price"), self.unit_price_spin) # Changed label key if needed, or reuse generic
+        
+        # Packing Quantity
+        self.packing_qty_spin = QSpinBox()
+        self.packing_qty_spin.setRange(1, 1000)
+        self.packing_qty_spin.setValue(20)
+        price_layout.addRow(_("label_packing_qty"), self.packing_qty_spin)
+
+        
+
         
         layout.addWidget(tabs)
         
@@ -132,10 +179,31 @@ class ProductFormDialog(QDialog):
                 index = self.supplier_combo.findData(supplier_id)
                 if index >= 0:
                     self.supplier_combo.setCurrentIndex(index)
+
+            # Select Category
+            category_id = self.product.get('category_id')
+            if category_id:
+                index = self.category_combo.findData(category_id)
+                if index >= 0:
+                    self.category_combo.setCurrentIndex(index)
             
             if self.product.get('expiry_date'):
                 self.enable_expiry.setChecked(True)
                 self.expiry_date_edit.setDate(QDate.fromString(self.product['expiry_date'], "yyyy-MM-dd"))
+            
+            
+            # Load Packing Qty
+            packing_qty = self.product.get('packing_quantity', 20)
+            self.packing_qty_spin.setValue(packing_qty if packing_qty else 20)
+            
+            # Hide auto-create for existing products (edit mode)
+            self.auto_create_unit_check.setVisible(False)
+            self.unit_price_spin.setVisible(False)
+
+    
+    def _toggle_unit_fields(self, checked):
+        """Toggle unit price field visibility"""
+        self.unit_price_spin.setEnabled(checked)
                 
     def save(self):
         _ = i18n_manager.get
@@ -153,13 +221,48 @@ class ProductFormDialog(QDialog):
             'stock_quantity': self.stock_spin.value(),
             'min_stock_level': self.min_stock_spin.value(),
             'expiry_date': self.expiry_date_edit.date().toString("yyyy-MM-dd") if self.enable_expiry.isChecked() else None,
-            'supplier_id': self.supplier_combo.currentData()
+            'supplier_id': self.supplier_combo.currentData(),
+            'category_id': self.category_combo.currentData(),
+            'is_tobacco': 0, # Removed feature
+            'parent_product_id': None, # Removed manual linking
+            'packing_quantity': self.packing_qty_spin.value()
         }
+
         
         if self.product:
             success, msg = product_manager.update_product(self.product['id'], **data)
         else:
-            success, msg, pid = product_manager.create_product(**data)
+            success, msg, pack_id = product_manager.create_product(**data)
+            
+            # Auto-create Unit product if checkbox is checked
+            if success and self.auto_create_unit_check.isChecked() and self.unit_price_spin.value() > 0:
+                unit_name = f"{self.name_edit.text()}{_('unit_suffix_fr')}"
+                unit_barcode = f"{self.barcode_edit.text()}-U" if self.barcode_edit.text() else None
+                
+                name_ar = self.name_ar_edit.text()
+                unit_name_ar = f"{name_ar}{_('unit_suffix_ar')}" if name_ar else None
+
+                unit_data = {
+                    'barcode': unit_barcode,
+                    'name': unit_name,
+                    'name_ar': unit_name_ar,
+                    'description': _("unit_of").format(self.name_edit.text()),
+                    'purchase_price': self.purchase_price_spin.value() / self.packing_qty_spin.value(),  # Cost per unit
+                    'selling_price': self.unit_price_spin.value(),
+                    'stock_quantity': 0,  # Start with 0, will be filled when pack is opened
+                    'min_stock_level': 0,
+                    'supplier_id': self.supplier_combo.currentData(),
+                    'category_id': self.category_combo.currentData(),
+                    'is_tobacco': 0,
+                    'parent_product_id': pack_id,  # Link to the pack we just created
+                    'packing_quantity': self.packing_qty_spin.value()
+                }
+                
+                unit_success, unit_msg, unit_id = product_manager.create_product(**unit_data)
+                if unit_success:
+                    msg = _("msg_pack_unit_created")
+                else:
+                    msg = f"Paquet créé, mais erreur Unité: {unit_msg}"
             
         if success:
             self.accept()
@@ -176,6 +279,11 @@ class ProductsPage(QWidget):
         self.load_products()
         
         i18n_manager.language_changed.connect(self.update_ui_text)
+        
+        # Connect to real-time signals
+        data_signals.inventory_changed.connect(self.load_products)
+        data_signals.product_changed.connect(self.load_products)
+        data_signals.products_changed.connect(self.load_products)
         self.update_ui_text()
         
     def init_ui(self):
@@ -514,14 +622,12 @@ class ProductsPage(QWidget):
             self.load_products()
 
     def print_barcode(self, product):
-        """Imprimer le code-barres d'un produit"""
+        """Afficher et imprimer le code-barres d'un produit (16.83×22.86mm)"""
         try:
-            from reportlab.lib.pagesizes import mm
-            from reportlab.pdfgen import canvas
-            from reportlab.graphics.barcode import code128
-            from reportlab.lib.units import mm
-            import os
-            import subprocess
+            from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel
+            from PyQt5.QtGui import QPainter, QFont, QImage, QPen
+            from PyQt5.QtCore import Qt, QRectF, QSizeF
+            from PyQt5.QtPrintSupport import QPrinter, QPrintDialog
             
             barcode_value = product.get('barcode', '')
             product_name = product.get('name', 'Produit')
@@ -532,55 +638,210 @@ class ProductsPage(QWidget):
                 QMessageBox.warning(self, _("title_error"), _("msg_no_barcode"))
                 return
             
-            # Créer le dossier si nécessaire
-            import config
-            barcode_dir = config.DATA_DIR / "barcodes"
-            barcode_dir.mkdir(exist_ok=True)
+            # Label dimensions in mm
+            LABEL_W_MM = 16.83
+            LABEL_H_MM = 22.86
             
-            # Générer le PDF
-            filename = barcode_dir / f"barcode_{barcode_value}.pdf"
+            # DPI for rendering preview (higher = sharper)
+            PREVIEW_DPI = 300
+            PREVIEW_SCALE = 4  # Scale up for display
             
-            # Taille étiquette: 50mm x 30mm
-            width = 60 * mm
-            height = 35 * mm
+            # Pixel dimensions for preview image
+            px_w = int(LABEL_W_MM / 25.4 * PREVIEW_DPI)
+            px_h = int(LABEL_H_MM / 25.4 * PREVIEW_DPI)
             
-            c = canvas.Canvas(str(filename), pagesize=(width, height))
-            
-            # Nom du produit (tronqué si trop long)
-            c.setFont("Helvetica-Bold", 8)
-            name_display = product_name[:25] + "..." if len(product_name) > 25 else product_name
-            c.drawCentredString(width/2, height - 8*mm, name_display)
-            
-            # Code-barres
-            barcode = code128.Code128(barcode_value, barWidth=0.4*mm, barHeight=12*mm)
-            barcode.drawOn(c, 5*mm, 10*mm)
-            
-            # Texte code-barres
-            c.setFont("Helvetica", 6)
-            c.drawCentredString(width/2, 6*mm, barcode_value)
-            
-            # Prix
-            c.setFont("Helvetica-Bold", 10)
-            c.drawCentredString(width/2, 2*mm, f"{price} DA")
-            
-            c.save()
-            
-            # Ouvrir le PDF
-            if os.name == 'nt':
-                os.startfile(str(filename))
-            else:
-                subprocess.run(['xdg-open', str(filename)])
+            def render_barcode_image():
+                """Render barcode label to QImage"""
+                img = QImage(px_w, px_h, QImage.Format_RGB32)
+                img.fill(Qt.white)
                 
-            logger.info(f"Code-barres généré: {filename}")
+                painter = QPainter(img)
+                painter.setRenderHint(QPainter.Antialiasing)
+                painter.setRenderHint(QPainter.TextAntialiasing)
+                
+                # Scale factor (pixels per mm)
+                ppmm = PREVIEW_DPI / 25.4
+                
+                # Draw product name at top (truncated)
+                name_display = product_name[:15] + "..." if len(product_name) > 15 else product_name
+                font_name = QFont("Arial", max(1, int(3.5 * ppmm / 4)), QFont.Bold)
+                painter.setFont(font_name)
+                name_rect = QRectF(0.5 * ppmm, 0.5 * ppmm, (LABEL_W_MM - 1) * ppmm, 4 * ppmm)
+                painter.drawText(name_rect, Qt.AlignCenter | Qt.TextWordWrap, name_display)
+                
+                # Draw barcode using simple Code128-like bars representation
+                # Generate Code128 barcode pattern
+                bars = _generate_code128_bars(barcode_value)
+                if bars:
+                    bar_area_x = 1.0 * ppmm
+                    bar_area_y = 5.0 * ppmm
+                    bar_area_w = (LABEL_W_MM - 2.0) * ppmm
+                    bar_area_h = 9 * ppmm
+                    
+                    total_bars = len(bars)
+                    bar_width = bar_area_w / total_bars if total_bars > 0 else 1
+                    
+                    painter.setPen(Qt.NoPen)
+                    for i, bar in enumerate(bars):
+                        if bar == '1':
+                            painter.setBrush(Qt.black)
+                            painter.drawRect(QRectF(
+                                bar_area_x + i * bar_width,
+                                bar_area_y,
+                                bar_width + 0.5,  # Slight overlap to avoid gaps
+                                bar_area_h
+                            ))
+                
+                # Draw barcode text below bars
+                font_code = QFont("Consolas", max(1, int(2.5 * ppmm / 4)))
+                painter.setFont(font_code)
+                painter.setPen(Qt.black)
+                code_rect = QRectF(0, 14.5 * ppmm, LABEL_W_MM * ppmm, 3 * ppmm)
+                painter.drawText(code_rect, Qt.AlignCenter, barcode_value)
+                
+                # Draw price at bottom
+                font_price = QFont("Arial", max(1, int(3.5 * ppmm / 4)), QFont.Bold)
+                painter.setFont(font_price)
+                price_rect = QRectF(0, 18 * ppmm, LABEL_W_MM * ppmm, 4 * ppmm)
+                painter.drawText(price_rect, Qt.AlignCenter, f"{price:.0f} DA")
+                
+                painter.end()
+                return img
             
-        except ImportError:
-            _ = i18n_manager.get
-            QMessageBox.warning(self, _("title_missing_module"), 
-                _("msg_reportlab_missing"))
+            def _generate_code128_bars(data):
+                """Generate a simple barcode bar pattern for display"""
+                # Code 128B encoding
+                CODE128_START_B = 104
+                CODE128_STOP = 106
+                
+                # Patterns for Code 128 (each character = 6 bars + 6 spaces = string of 0s and 1s)
+                PATTERNS = [
+                    "11011001100", "11001101100", "11001100110", "10010011000", "10010001100",
+                    "10001001100", "10011001000", "10011000100", "10001100100", "11001001000",
+                    "11001000100", "11000100100", "10110011100", "10011011100", "10011001110",
+                    "10111001100", "10011101100", "10011100110", "11001110010", "11001011100",
+                    "11001001110", "11011100100", "11001110100", "11101101110", "11101001100",
+                    "11100101100", "11100100110", "11101100100", "11100110100", "11100110010",
+                    "11011011000", "11011000110", "11000110110", "10100011000", "10001011000",
+                    "10001000110", "10110001000", "10001101000", "10001100010", "11010001000",
+                    "11000101000", "11000100010", "10110111000", "10110001110", "10001101110",
+                    "10111011000", "10111000110", "10001110110", "11101110110", "11010001110",
+                    "11000101110", "11011101000", "11011100010", "11011101110", "11101011000",
+                    "11101000110", "11100010110", "11101101000", "11101100010", "11100011010",
+                    "11101111010", "11001000010", "11110001010", "10100110000", "10100001100",
+                    "10010110000", "10010000110", "10000101100", "10000100110", "10110010000",
+                    "10110000100", "10011010000", "10011000010", "10000110100", "10000110010",
+                    "11000010010", "11001010000", "11110111010", "11000010100", "10001111010",
+                    "10100111100", "10010111100", "10010011110", "10111100100", "10011110100",
+                    "10011110010", "11110100100", "11110010100", "11110010010", "11011011110",
+                    "11011110110", "11110110110", "10101111000", "10100011110", "10001011110",
+                    "10111101000", "10111100010", "11110101000", "11110100010", "10111011110",
+                    "10111101110", "11101011110", "11110101110", "11010000100", "11010010000",
+                    "11010011100", "1100011101011",
+                ]
+                
+                result = ""
+                # Start code B
+                result += PATTERNS[CODE128_START_B]
+                
+                checksum = CODE128_START_B
+                for i, char in enumerate(data):
+                    code = ord(char) - 32
+                    if 0 <= code < len(PATTERNS):
+                        result += PATTERNS[code]
+                        checksum += code * (i + 1)
+                
+                # Checksum
+                checksum_val = checksum % 103
+                if checksum_val < len(PATTERNS):
+                    result += PATTERNS[checksum_val]
+                
+                # Stop code
+                result += PATTERNS[CODE128_STOP]
+                
+                return result
+            
+            # Render the barcode image
+            barcode_img = render_barcode_image()
+            
+            # Create preview dialog
+            dialog = QDialog(self)
+            dialog.setWindowTitle(f"Code-barres: {product_name}")
+            dialog.setMinimumSize(350, 400)
+            
+            dlg_layout = QVBoxLayout(dialog)
+            
+            # Preview label (scaled up for visibility)
+            from PyQt5.QtGui import QPixmap
+            preview_label = QLabel()
+            pixmap = QPixmap.fromImage(barcode_img)
+            scaled_pixmap = pixmap.scaled(
+                px_w * PREVIEW_SCALE // PREVIEW_DPI * 96,
+                px_h * PREVIEW_SCALE // PREVIEW_DPI * 96, 
+                Qt.KeepAspectRatio, Qt.SmoothTransformation
+            )
+            preview_label.setPixmap(scaled_pixmap)
+            preview_label.setAlignment(Qt.AlignCenter)
+            preview_label.setStyleSheet("border: 1px dashed #ccc; padding: 10px; background: white;")
+            dlg_layout.addWidget(preview_label)
+            
+            # Info label
+            info = QLabel(f"Taille: {LABEL_W_MM} × {LABEL_H_MM} mm")
+            info.setAlignment(Qt.AlignCenter)
+            info.setStyleSheet("color: #666; font-size: 12px;")
+            dlg_layout.addWidget(info)
+            
+            # Buttons
+            btn_layout = QHBoxLayout()
+            
+            print_btn = QPushButton("🖨️ Imprimer")
+            print_btn.setMinimumHeight(40)
+            print_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #3b82f6; color: white;
+                    border: none; border-radius: 8px;
+                    font-size: 14px; font-weight: bold;
+                }
+                QPushButton:hover { background-color: #2563eb; }
+            """)
+            
+            def do_print():
+                printer = QPrinter(QPrinter.HighResolution)
+                printer.setPageSizeMM(QSizeF(LABEL_W_MM, LABEL_H_MM))
+                printer.setFullPage(True)
+                
+                print_dialog = QPrintDialog(printer, dialog)
+                if print_dialog.exec_() == QDialog.Accepted:
+                    p = QPainter(printer)
+                    # Scale image to fill the printer page
+                    page_rect = printer.pageRect()
+                    p.drawImage(page_rect, barcode_img)
+                    p.end()
+                    logger.info(f"Code-barres imprimé: {barcode_value}")
+            
+            print_btn.clicked.connect(do_print)
+            btn_layout.addWidget(print_btn)
+            
+            close_btn = QPushButton("Fermer")
+            close_btn.setMinimumHeight(40)
+            close_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #e5e7eb; color: #374151;
+                    border: none; border-radius: 8px;
+                    font-size: 14px; font-weight: bold;
+                }
+                QPushButton:hover { background-color: #d1d5db; }
+            """)
+            close_btn.clicked.connect(dialog.close)
+            btn_layout.addWidget(close_btn)
+            
+            dlg_layout.addLayout(btn_layout)
+            dialog.exec_()
+            
         except Exception as e:
-            logger.error(f"Erreur génération code-barres: {e}")
+            logger.error(f"Erreur code-barres: {e}")
             _ = i18n_manager.get
-            QMessageBox.critical(self, _("title_error"), f"Impossible de générer le code-barres: {e}")
+            QMessageBox.critical(self, _("title_error"), f"Erreur code-barres: {e}")
 
     def show_context_menu(self, pos):
         menu = QMenu(self)

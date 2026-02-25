@@ -33,13 +33,14 @@ APP_VERSION = "1.0.0"
 COMPANY_NAME = "DamDev Solutions"
 
 # Paramètres du magasin (modifiables via interface)
+# Paramètres du magasin (modifiables via interface)
 STORE_CONFIG = {
-    "name": "Supérette AKHRIB",
-    "address": "123 Rue Principale",
-    "city": "Ville",
-    "phone": "+213 XX XX XX XX",
-    "email": "contact@superette-akhrib.dz",
-    "tax_id": "000000000000000",  # NIF
+    "name": "",
+    "address": "",
+    "city": "",
+    "phone": "",
+    "email": "",
+    "tax_id": "",  # NIF
     "currency": "DA",  # Dinar Algérien
     "currency_symbol": "DA",
     "tax_rate": 19.0,  # TVA 19%
@@ -75,7 +76,7 @@ BACKUP_CONFIG = {
     "backup_time": "23:00",  # Heure de sauvegarde automatique
     "backup_interval_hours": 5, # Intervalle en heures
     "keep_backups_days": 30,  # Garder les sauvegardes pendant 30 jours
-    "compress_backups": False,
+    "compress_backups": True,
 }
 
 # Paramètres multi-langue
@@ -119,14 +120,19 @@ PERMISSIONS = {
         "manage_users",
         "view_reports",
         "manage_settings",
+        "manage_finance",   # NEW: Access to Caisse/Coffre
         "make_sales",
         "process_returns",
         "manage_backups",
+        "manage_reset",     # NEW: Specific permission for factory reset
+        "manage_shortcuts", # NEW: Manage POS shortcuts
+        "cancel_sales",     # NEW: Ability to fully cancel a sale
         "view_audit_log",
         "view_products",
         "view_customers",
         "view_suppliers",
         "override_credit_limit",  # Allow exceeding customer credit limit
+        "view_sales_history",     # NEW: Access to Sales Archive
     ],
     "cashier": [
         "make_sales",

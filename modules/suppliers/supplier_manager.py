@@ -5,6 +5,7 @@ Gestionnaire de fournisseurs
 from typing import List, Optional, Dict, Any
 from database.db_manager import db
 from core.logger import logger
+from core.data_signals import data_signals
 
 
 class SupplierManager:
@@ -44,6 +45,8 @@ class SupplierManager:
                     """
                     db.execute_update(update_query, (contact_person, phone, email, address, supplier_id))
                     logger.info(f"Fournisseur réactivé: {company_name} (Code: {existing_code})")
+                    data_signals.supplier_added.emit()
+                    data_signals.suppliers_changed.emit()
                     return True, f"Fournisseur réactivé avec succès (Code: {existing_code})", supplier_id
 
             # Générer un code fournisseur unique
@@ -60,6 +63,8 @@ class SupplierManager:
             ))
             
             logger.info(f"Fournisseur créé: {company_name} (Code: {code})")
+            data_signals.supplier_added.emit()
+            data_signals.suppliers_changed.emit()
             return True, f"Fournisseur créé avec succès (Code: {code})", supplier_id
             
         except Exception as e:
@@ -99,6 +104,8 @@ class SupplierManager:
             
             if rows_affected > 0:
                 logger.info(f"Fournisseur mis à jour: ID {supplier_id}")
+                data_signals.supplier_updated.emit()
+                data_signals.suppliers_changed.emit()
                 return True, "Fournisseur mis à jour avec succès"
             else:
                 return False, "Fournisseur introuvable"
@@ -142,6 +149,8 @@ class SupplierManager:
             
             if rows_affected > 0:
                 logger.info(f"Fournisseur supprimé: ID {supplier_id}")
+                data_signals.supplier_deleted.emit()
+                data_signals.suppliers_changed.emit()
                 return True, "Fournisseur supprimé avec succès"
             else:
                 return False, "Fournisseur introuvable"
@@ -264,6 +273,8 @@ class SupplierManager:
                 db.commit()
                 
                 logger.info(f"Achat enregistré: Fournisseur {supplier_id} - Achat: {purchase_amount} DA, Dette: {debt_amount} DA")
+                data_signals.supplier_updated.emit()
+                data_signals.suppliers_changed.emit()
                 return True, f"Achat enregistré: {purchase_amount} DA (Dette ajoutée: {debt_amount} DA)"
                 
             except Exception as e:
@@ -319,6 +330,8 @@ class SupplierManager:
                 db.commit()
                 
                 logger.info(f"Paiement fournisseur: Fournisseur {supplier_id} - {amount} DA")
+                data_signals.supplier_updated.emit()
+                data_signals.suppliers_changed.emit()
                 return True, f"Paiement enregistré: {amount} DA"
                 
             except Exception as e:

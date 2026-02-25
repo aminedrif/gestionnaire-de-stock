@@ -5,7 +5,9 @@ Dialogue de connexion - Design Premium Modern (Split Layout)
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
                              QLineEdit, QPushButton, QFrame, QGraphicsDropShadowEffect,
                              QWidget, QApplication)
-from PyQt5.QtCore import Qt, pyqtSignal, QPoint, QPropertyAnimation, QEasingCurve, QSize
+from PyQt5.QtCore import Qt, pyqtSignal, QPoint, QPropertyAnimation, QEasingCurve, QSize, QTimer
+
+
 from PyQt5.QtGui import QFont, QColor, QIcon, QLinearGradient, QPalette, QBrush, QPixmap
 from core.auth import auth_manager
 from core.logger import logger
@@ -144,6 +146,7 @@ class LoginDialog(QDialog):
         # Lang Toggle
         self.lang_btn = QPushButton("العربية")
         self.lang_btn.setFixedSize(70, 30)
+        self.lang_btn.setAutoDefault(False)  # Don't trigger on Enter
         self.lang_btn.setCursor(Qt.PointingHandCursor)
         self.lang_btn.setStyleSheet("""
             QPushButton {
@@ -165,6 +168,7 @@ class LoginDialog(QDialog):
         
         self.close_btn = QPushButton("✕")
         self.close_btn.setFixedSize(30, 30)
+        self.close_btn.setAutoDefault(False)  # Don't trigger on Enter
         self.close_btn.setCursor(Qt.PointingHandCursor)
         self.close_btn.setStyleSheet("""
             QPushButton {
@@ -338,9 +342,9 @@ class LoginDialog(QDialog):
         except Exception as e:
             logger.error(f"Error toggling language: {e}")
         finally:
-            # Restore shadow
+            # Restore shadow with small delay to prevent UpdateLayeredWindowIndirect failures
             if hasattr(self, 'main_container'):
-                self.add_shadow()
+                QTimer.singleShot(100, self.add_shadow)
         
     def update_ui_text(self):
         """Update texts based on current language"""

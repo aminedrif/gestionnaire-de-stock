@@ -6,6 +6,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 from database.db_manager import db
 from core.logger import logger
+from core.data_signals import data_signals
 import config
 
 
@@ -18,7 +19,9 @@ class ProductManager:
                       category_id: int = None, stock_quantity: int = 0,
                       min_stock_level: int = 10, unit: str = "pièce",
                       expiry_date: str = None, manufacturing_date: str = None,
-                      supplier_id: int = None, created_by: int = None) -> tuple[bool, str, Optional[int]]:
+                      supplier_id: int = None, created_by: int = None,
+                      is_tobacco: int = 0, parent_product_id: int = None,
+                      packing_quantity: int = 20) -> tuple[bool, str, Optional[int]]:
         """
         Créer un nouveau produit
         
@@ -37,6 +40,9 @@ class ProductManager:
             manufacturing_date: Date de fabrication (YYYY-MM-DD)
             supplier_id: ID du fournisseur
             created_by: ID de l'utilisateur créateur
+            is_tobacco: Indique si le produit est du tabac (0 ou 1)
+            parent_product_id: ID du produit parent (pour les produits groupés)
+            packing_quantity: Quantité d'unités dans un emballage
             
         Returns:
             (success, message, product_id)
@@ -64,17 +70,20 @@ class ProductManager:
                         SET name = ?, name_ar = ?, description = ?, category_id = ?,
                             purchase_price = ?, selling_price = ?, stock_quantity = ?, min_stock_level = ?,
                             unit = ?, expiry_date = ?, manufacturing_date = ?, supplier_id = ?, is_active = 1,
-                            created_by = ?
+                            created_by = ?, is_tobacco = ?, parent_product_id = ?, packing_quantity = ?
                         WHERE id = ?
                     """
                     db.execute_update(update_query, (
                         name, name_ar, description, category_id,
                         purchase_price, selling_price, stock_quantity, min_stock_level,
                         unit, expiry_date, manufacturing_date, supplier_id, created_by,
+                        is_tobacco, parent_product_id, packing_quantity,
                         product_id
                     ))
                     
                     logger.info(f"Produit réactivé: {name} (ID: {product_id})")
+                    data_signals.product_added.emit()
+                    data_signals.products_changed.emit()
                     return True, "Produit réactivé avec succès", product_id
             
             # Insérer le produit
@@ -82,14 +91,16 @@ class ProductManager:
                 INSERT INTO products (
                     barcode, name, name_ar, description, category_id,
                     purchase_price, selling_price, stock_quantity, min_stock_level,
-                    unit, expiry_date, manufacturing_date, supplier_id, created_by
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    unit, expiry_date, manufacturing_date, supplier_id, created_by,
+                    is_tobacco, parent_product_id, packing_quantity
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
             
             product_id = db.execute_insert(insert_query, (
                 barcode, name, name_ar, description, category_id,
                 purchase_price, selling_price, stock_quantity, min_stock_level,
-                unit, expiry_date, manufacturing_date, supplier_id, created_by
+                unit, expiry_date, manufacturing_date, supplier_id, created_by,
+                is_tobacco, parent_product_id, packing_quantity
             ))
             
             logger.info(f"Produit créé: {name} (ID: {product_id})")
@@ -98,6 +109,8 @@ class ProductManager:
             if stock_quantity <= min_stock_level:
                 logger.log_stock_alert(name, stock_quantity)
             
+            data_signals.product_added.emit()
+            data_signals.products_changed.emit()
             return True, "Produit créé avec succès", product_id
             
         except Exception as e:
@@ -122,7 +135,8 @@ class ProductManager:
                 'barcode', 'name', 'name_ar', 'description', 'category_id',
                 'purchase_price', 'selling_price', 'stock_quantity', 'min_stock_level',
                 'unit', 'expiry_date', 'manufacturing_date', 'supplier_id',
-                'discount_percentage', 'is_on_promotion'
+                'discount_percentage', 'is_on_promotion',
+                'is_tobacco', 'parent_product_id', 'packing_quantity'
             ]
             
             # Filtrer les champs
@@ -152,6 +166,8 @@ class ProductManager:
                     if product and product['stock_quantity'] <= product['min_stock_level']:
                         logger.log_stock_alert(product['name'], product['stock_quantity'])
                 
+                data_signals.product_updated.emit()
+                data_signals.products_changed.emit()
                 return True, "Produit mis à jour avec succès"
             else:
                 return False, "Produit introuvable"
@@ -177,6 +193,8 @@ class ProductManager:
             
             if rows_affected > 0:
                 logger.info(f"Produit supprimé: ID {product_id}")
+                data_signals.product_deleted.emit()
+                data_signals.products_changed.emit()
                 return True, "Produit supprimé avec succès"
             else:
                 return False, "Produit introuvable"
@@ -224,6 +242,26 @@ class ProductManager:
             WHERE p.barcode = ? AND p.is_active = 1
         """
         result = db.fetch_one(query, (barcode,))
+        return dict(result) if result else None
+    
+    def get_product_by_name(self, name: str) -> Optional[Dict]:
+        """
+        Obtenir un produit par son nom exact
+        
+        Args:
+            name: Nom du produit
+            
+        Returns:
+            Dictionnaire avec les données du produit ou None
+        """
+        query = """
+            SELECT p.*, c.name as category_name, s.company_name as supplier_name
+            FROM products p
+            LEFT JOIN categories c ON p.category_id = c.id
+            LEFT JOIN suppliers s ON p.supplier_id = s.id
+            WHERE p.name = ? AND p.is_active = 1
+        """
+        result = db.fetch_one(query, (name,))
         return dict(result) if result else None
     
     def search_products(self, search_term: str, category_id: int = None,
@@ -332,6 +370,8 @@ class ProductManager:
             if new_quantity <= product['min_stock_level']:
                 logger.log_stock_alert(product['name'], new_quantity)
             
+            data_signals.product_updated.emit()
+            data_signals.products_changed.emit()
             return True, f"Stock mis à jour: {new_quantity}"
             
         except Exception as e:
@@ -378,30 +418,38 @@ class ProductManager:
             LEFT JOIN categories c ON p.category_id = c.id
             WHERE p.stock_quantity <= p.min_stock_level 
               AND p.is_active = 1
+              AND p.parent_product_id IS NULL
             ORDER BY p.stock_quantity ASC
         """
         results = db.execute_query(query)
         return [dict(row) for row in results]
     
-    def get_expiring_products(self, days: int = 30) -> List[Dict]:
+    def get_expiring_products(self, days: int = None) -> List[Dict]:
         """
         Obtenir les produits qui expirent bientôt
         
         Args:
-            days: Nombre de jours avant expiration
+            days: Nombre de jours avant expiration (si None, utilise la config)
             
         Returns:
             Liste de produits
         """
+        if days is None:
+            try:
+                res = db.fetch_one("SELECT setting_value FROM settings WHERE setting_key = 'expiry_warning_days'")
+                days = int(res['setting_value']) if res else 7
+            except:
+                days = 7
+
         query = """
             SELECT p.*, c.name as category_name,
                    CAST((julianday(p.expiry_date) - julianday('now')) AS INTEGER) as days_until_expiry
             FROM products p
             LEFT JOIN categories c ON p.category_id = c.id
             WHERE p.expiry_date IS NOT NULL 
-              AND p.expiry_date > date('now')
-              AND p.expiry_date <= date('now', '+' || ? || ' days')
-              AND p.is_active = 1
+            AND p.expiry_date > date('now')
+            AND p.expiry_date <= date('now', '+' || ? || ' days')
+            AND p.is_active = 1
             ORDER BY p.expiry_date ASC
         """
         results = db.execute_query(query, (days,))

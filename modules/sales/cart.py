@@ -9,7 +9,7 @@ from modules.products.product_manager import product_manager
 class CartItem:
     """Article dans le panier"""
     
-    def __init__(self, product: Dict, quantity: float = 1.0):
+    def __init__(self, product: Dict, quantity: float = 1.0, prevent_merge: bool = False):
         self.product_id = product['id']
         self.product_name = product['name']
         self.product_name_ar = product.get('name_ar', '')
@@ -19,6 +19,8 @@ class CartItem:
         self.quantity = quantity
         self.discount_percentage = product.get('discount_percentage', 0.0)
         self.is_on_promotion = product.get('is_on_promotion', 0)
+        self.prevent_merge = prevent_merge
+        self.category_id = product.get('category_id') # Handle category for custom items
         
     def get_subtotal(self) -> float:
         """Calculer le sous-total (avec réduction produit)"""
@@ -44,6 +46,8 @@ class CartItem:
             'discount_percentage': self.discount_percentage,
             'subtotal': self.get_subtotal(),
             'profit': self.get_profit(),
+            'prevent_merge': self.prevent_merge,
+            'category_id': self.category_id
         }
 
 
@@ -55,34 +59,61 @@ class Cart:
         self.discount_percentage = 0.0  # Réduction globale
         self.discount_amount = 0.0  # Réduction en montant fixe
     
-    def add_item(self, product: Dict, quantity: float = 1.0) -> tuple[bool, str]:
+    def _check_stock(self, product: Dict, quantity: float) -> tuple[bool, str]:
+        """Check if stock (including parent packs) is sufficient"""
+        current_stock = product['stock_quantity']
+        if current_stock >= quantity:
+            return True, "OK"
+            
+        # Check parent (Auto-Open logic)
+        parent_id = product.get('parent_product_id')
+        if parent_id:
+            parent = product_manager.get_product(parent_id)
+            if parent:
+                pack_qty = product.get('packing_quantity') or 20
+                total_avail = current_stock + (parent['stock_quantity'] * pack_qty)
+                if total_avail >= quantity:
+                    return True, "OK"
+                return False, f"Stock insuffisant (Inclus paquets: {total_avail})"
+        
+        return False, f"Stock insuffisant. Disponible: {current_stock}"
+
+    def add_item(self, product: Dict, quantity: float = 1.0, prevent_merge: bool = False) -> tuple[bool, str]:
         """
         Ajouter un article au panier
         
         Args:
             product: Dictionnaire du produit
             quantity: Quantité
+            prevent_merge: Si True, ne pas fusionner avec un item existant
             
         Returns:
             (success, message)
         """
-        # Vérifier le stock disponible
-        if product['stock_quantity'] < quantity:
-            return False, f"Stock insuffisant. Disponible: {product['stock_quantity']}"
+        # Vérifier le stock disponible (Smart Logic)
+        is_valid, msg = self._check_stock(product, quantity)
+        if not is_valid:
+            return False, msg
+
         
-        # Vérifier si le produit est déjà dans le panier
-        for item in self.items:
-            if item.product_id == product['id']:
-                # Vérifier le stock total
-                new_quantity = item.quantity + quantity
-                if product['stock_quantity'] < new_quantity:
-                    return False, f"Stock insuffisant. Disponible: {product['stock_quantity']}"
-                
-                item.quantity = new_quantity
-                return True, f"Quantité mise à jour: {new_quantity}"
+        # Vérifier si le produit est déjà dans le panier (sauf si prevent_merge)
+        if not prevent_merge:
+            for item in self.items:
+                if item.product_id == product['id']:
+                    # Vérifier le stock total
+                    # Vérifier le stock total
+                    new_quantity = item.quantity + quantity
+                    
+                    # Smart Stock Check
+                    is_valid, msg = self._check_stock(product, new_quantity)
+                    if not is_valid:
+                        return False, msg
+                    
+                    item.quantity = new_quantity
+                    return True, f"Quantité mise à jour: {new_quantity}"
         
         # Ajouter un nouvel article
-        cart_item = CartItem(product, quantity)
+        cart_item = CartItem(product, quantity, prevent_merge)
         self.items.append(cart_item)
         return True, "Article ajouté au panier"
     
@@ -120,9 +151,12 @@ class Cart:
         for item in self.items:
             if item.product_id == product_id:
                 # Vérifier le stock
+                # Vérifier le stock
                 product = product_manager.get_product(product_id)
-                if product and product['stock_quantity'] < quantity:
-                    return False, f"Stock insuffisant. Disponible: {product['stock_quantity']}"
+                if product:
+                    is_valid, msg = self._check_stock(product, quantity)
+                    if not is_valid:
+                        return False, msg
                 
                 item.quantity = quantity
                 return True, f"Quantité mise à jour: {quantity}"

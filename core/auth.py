@@ -27,6 +27,8 @@ class AuthManager:
         Returns:
             (success, message, user_data)
         """
+        from core.i18n import i18n_manager
+        
         # Récupérer l'utilisateur
         query = """
             SELECT id, username, password_hash, full_name, role, is_active,
@@ -37,11 +39,11 @@ class AuthManager:
         user = db.fetch_one(query, (username,))
         
         if not user:
-            return False, "Nom d'utilisateur ou mot de passe incorrect", None
+            return False, i18n_manager.get('msg_login_failed'), None
         
         # Vérifier si le compte est actif
         if not user['is_active']:
-            return False, "Ce compte est désactivé", None
+            return False, i18n_manager.get('msg_account_disabled'), None
         
         # VERROUILLAGE DÉSACTIVÉ POUR LE DÉVELOPPEMENT
         # Vérifier si le compte est verrouillé
@@ -71,7 +73,7 @@ class AuthManager:
             # remaining = max_attempts - failed_attempts
             # return False, f"Mot de passe incorrect. {remaining} tentative(s) restante(s)", None
             
-            return False, "Nom d'utilisateur ou mot de passe incorrect", None
+            return False, i18n_manager.get('msg_login_failed'), None
         
         # Connexion réussie
         self._reset_failed_attempts(user['id'])
@@ -138,6 +140,10 @@ class AuthManager:
         
         # 2. Fallback to role-based default permissions
         return permission in config.PERMISSIONS.get(role, [])
+
+    def check_permission(self, permission: str) -> bool:
+        """Alias for has_permission for compatibility"""
+        return self.has_permission(permission)
     
     def get_user_permissions(self, user_id: int) -> Dict[str, bool]:
         """

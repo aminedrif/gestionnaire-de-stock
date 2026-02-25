@@ -13,19 +13,24 @@ from reportlab.lib.enums import TA_CENTER, TA_LEFT
 
 from database.db_manager import db
 from core.logger import logger
+from core.i18n import i18n_manager
 import config
 
 def generate_reorder_report():
     """Générer un PDF de liste de commande basé sur le stock faible"""
     try:
+        # Get iterator for translation
+        _ = i18n_manager.get
+        
         # 1. Récupérer les produits en stock faible avec infos fournisseur
         query = """
             SELECT p.name, p.stock_quantity, p.min_stock_level, 
-                   s.company_name as supplier_name
+                   s.company_name as supplier_name, s.phone as supplier_phone
             FROM products p
             LEFT JOIN suppliers s ON p.supplier_id = s.id
             WHERE p.stock_quantity <= p.min_stock_level 
               AND p.is_active = 1
+              AND p.parent_product_id IS NULL
             ORDER BY s.company_name, p.name
         """
         results = db.execute_query(query)
@@ -53,7 +58,7 @@ def generate_reorder_report():
             alignment=TA_CENTER,
             textColor=colors.HexColor('#2c3e50')
         )
-        elements.append(Paragraph("Liste de Commande Fournisseur", title_style))
+        elements.append(Paragraph(_("reorder_report_title"), title_style))
         
         date_style = ParagraphStyle(
             'Date',
@@ -62,15 +67,20 @@ def generate_reorder_report():
             alignment=TA_CENTER,
             textColor=colors.HexColor('#7f8c8d')
         )
-        elements.append(Paragraph(f"Généré le: {datetime.now().strftime('%d/%m/%Y %H:%M')}", date_style))
+        elements.append(Paragraph(_("reorder_generated_on").format(datetime.now().strftime('%d/%m/%Y %H:%M')), date_style))
         elements.append(Spacer(1, 30))
         
         # 3. Organiser les données par fournisseur
         data_by_supplier = {}
+        supplier_phones = {} # Store phone numbers
+
         for row in results:
-            supplier = row['supplier_name'] if row['supplier_name'] else "Fournisseur Inconnu"
+            supplier = row['supplier_name'] if row['supplier_name'] else _("unknown_supplier")
+            phone = row['supplier_phone'] if row['supplier_phone'] else ""
+            
             if supplier not in data_by_supplier:
                 data_by_supplier[supplier] = []
+                supplier_phones[supplier] = phone
             
             # Calculer quantité suggérée (par exemple: pour atteindre 2x min_stock)
             suggested = (row['min_stock_level'] * 2) - row['stock_quantity']
@@ -94,10 +104,17 @@ def generate_reorder_report():
                 spaceAfter=10,
                 textColor=colors.HexColor('#3498db')
             )
-            elements.append(Paragraph(f"🏢 {supplier}", supplier_style))
+            
+            phone_text = f" - 📞 {supplier_phones[supplier]}" if supplier_phones.get(supplier) else ""
+            elements.append(Paragraph(f"🏢 {supplier}{phone_text}", supplier_style))
             
             # En-têtes du tableau
-            table_data = [['Produit', 'Stock Actuel', 'Stock Min', 'Qté à Commander']]
+            table_data = [[
+                _("col_product"), 
+                _("col_current_stock"), 
+                _("col_min_stock"), 
+                _("col_qty_to_order")
+            ]]
             table_data.extend(items)
             
             # Style du tableau

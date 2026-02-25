@@ -249,7 +249,45 @@ class LicenseDialog(QDialog):
         success, message = license_manager.activate_license(key)
         
         if success:
-            QMessageBox.information(self, "Activation Réussie", "Licence activée avec succès !\nBienvenue dans DamDev POS.")
+            # Check if any users exist, if not create a default admin
+            from core.auth import auth_manager
+            from database.db_manager import db
+            
+            user_count = db.fetch_one("SELECT COUNT(*) as cnt FROM users")
+            count = user_count['cnt'] if user_count else 0
+            
+            if count == 0:
+                # Generate default credentials
+                import string, random
+                password = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(8))
+                username = "admin"
+                full_name = "Administrateur"
+                
+                created, msg, user_id = auth_manager.create_user(
+                    username=username,
+                    password=password,
+                    full_name=full_name,
+                    role="admin"
+                )
+                
+                if created:
+                    QMessageBox.information(self, "Activation Réussie", 
+                        f"Licence activée avec succès !\n"
+                        f"Bienvenue dans DamDev POS.\n\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"👤 Vos identifiants par défaut:\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        f"Nom d'utilisateur: {username}\n"
+                        f"Mot de passe: {password}\n\n"
+                        f"⚠️ Vous pouvez les changer dans\n"
+                        f"les paramètres après connexion.")
+                else:
+                    QMessageBox.information(self, "Activation Réussie", 
+                        "Licence activée avec succès !\nBienvenue dans DamDev POS.")
+            else:
+                QMessageBox.information(self, "Activation Réussie", 
+                    "Licence activée avec succès !\nBienvenue dans DamDev POS.")
+            
             self.accept()
         else:
             QMessageBox.critical(self, "Erreur d'Activation", message)

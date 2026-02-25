@@ -171,8 +171,8 @@ class ProfitReportManager:
                 SUM(si.quantity * si.purchase_price) as cost,
                 SUM(si.quantity * (si.unit_price * (1 - si.discount_percentage / 100.0) - si.purchase_price)) as profit
             FROM sale_items si
-            JOIN products p ON si.product_id = p.id
-            JOIN categories c ON p.category_id = c.id
+            LEFT JOIN products p ON si.product_id = p.id
+            JOIN categories c ON COALESCE(si.category_id, p.category_id) = c.id
             JOIN sales s ON si.sale_id = s.id
             WHERE date(s.sale_date) BETWEEN ? AND ?
               AND s.status = 'completed'
@@ -198,37 +198,52 @@ class ProfitReportManager:
         
         return categories
     
-    def get_daily_profit_trend(self, start_date: str, end_date: str) -> List[Dict]:
+    def get_daily_profit_trend(self, start_date: str, end_date: str, category_id: int = None) -> List[Dict]:
         """
-        Obtenir la tendance des bénéfices jour par jour
+        Obtenir la tendance des bénéfices jour par jour (optionnel: filtrer par catégorie)
         
         Args:
             start_date: Date de début
             end_date: Date de fin
+            category_id: ID de la catégorie (optionnel)
             
         Returns:
             Liste des bénéfices par jour
         """
-        query = """
+        params = [start_date, end_date]
+        
+        # Base query setup
+        join_clause = "JOIN sales s ON si.sale_id = s.id"
+        where_clause = "WHERE date(s.sale_date) BETWEEN ? AND ? AND s.status = 'completed'"
+        
+        if category_id is not None:
+             join_clause += " LEFT JOIN products p ON si.product_id = p.id"
+             where_clause += " AND COALESCE(si.category_id, p.category_id) = ?"
+             params.append(category_id)
+        
+        query = f"""
             SELECT 
                 date(s.sale_date) as date,
                 SUM(si.quantity * si.unit_price * (1 - si.discount_percentage / 100.0)) as revenue,
+                SUM(CASE WHEN s.payment_method = 'credit' OR s.payment_method = 'dette' THEN 
+                    si.quantity * si.unit_price * (1 - si.discount_percentage / 100.0) 
+                    ELSE 0 END) as credit_revenue,
                 SUM(si.quantity * si.purchase_price) as cost,
                 SUM(si.quantity * (si.unit_price * (1 - si.discount_percentage / 100.0) - si.purchase_price)) as profit
             FROM sale_items si
-            JOIN sales s ON si.sale_id = s.id
-            WHERE date(s.sale_date) BETWEEN ? AND ?
-              AND s.status = 'completed'
+            {join_clause}
+            {where_clause}
             GROUP BY date(s.sale_date)
             ORDER BY date(s.sale_date)
         """
         
-        results = db.execute_query(query, (start_date, end_date))
+        results = db.execute_query(query, tuple(params))
         
         trend = []
         for row in results:
             day = dict(row)
             day['revenue'] = round(day['revenue'], 2)
+            day['credit_revenue'] = round(day['credit_revenue'], 2) if day['credit_revenue'] else 0.0
             day['cost'] = round(day['cost'], 2)
             day['profit'] = round(day['profit'], 2)
             
@@ -316,6 +331,41 @@ class ProfitReportManager:
             'total_cost': total_cost,
             'total_profit': total_profit,
         }
+
+
+
+    def get_category_performance_report(self, start_date: str, end_date: str) -> List[Dict]:
+        """
+        Obtenir le rapport de performance par catégorie avec le meilleur produit
+        """
+        # 1. Get basic category stats
+        stats = self.get_profit_by_category(start_date, end_date)
+        
+        # 2. For each category, find top product
+        for cat in stats:
+            cat_id = cat['id']
+            # Query for top product in this category for this period
+            query = """
+                SELECT p.name, SUM(si.quantity) as qty
+                FROM sale_items si
+                JOIN products p ON si.product_id = p.id
+                JOIN sales s ON si.sale_id = s.id
+                WHERE p.category_id = ?
+                  AND date(s.sale_date) BETWEEN ? AND ?
+                  AND s.status = 'completed'
+                GROUP BY p.id, p.name
+                ORDER BY qty DESC
+                LIMIT 1
+            """
+            top_prod = db.fetch_one(query, (cat_id, start_date, end_date))
+            if top_prod:
+                cat['top_product'] = top_prod['name']
+                cat['top_product_qty'] = top_prod['qty']
+            else:
+                cat['top_product'] = "-"
+                cat['top_product_qty'] = 0
+                
+        return stats
 
 
 # Instance globale

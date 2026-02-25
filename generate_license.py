@@ -1,9 +1,12 @@
 # -*- coding: utf-8 -*-
 """
 Utilitaire de génération de clés de licence PERMANENTES
++ Génération de nom d'utilisateur et mot de passe par défaut
 À utiliser par le développeur uniquement
 """
 import hashlib
+import string
+import random
 
 
 def generate_license_key(client_name: str, machine_id: str) -> str:
@@ -17,6 +20,34 @@ def generate_license_key(client_name: str, machine_id: str) -> str:
     validation_hash = hashlib.sha256(data_to_hash.encode()).hexdigest()[:12].upper()
     
     return f"PRO-{validation_hash}"
+
+
+def generate_default_credentials(client_name: str):
+    """
+    Générer un nom d'utilisateur et mot de passe par défaut pour un client.
+    Le client pourra les changer après la première connexion.
+    
+    Returns:
+        (username, password)
+    """
+    # Générer le username à partir du nom du client
+    # Nettoyer le nom: enlever les espaces, accents, caractères spéciaux
+    clean_name = client_name.strip().lower()
+    clean_name = clean_name.replace(" ", "")
+    # Garder uniquement les caractères alphanumériques
+    clean_name = ''.join(c for c in clean_name if c.isalnum())
+    
+    if not clean_name:
+        clean_name = "user"
+    
+    # Limiter à 15 caractères
+    username = clean_name[:15]
+    
+    # Générer un mot de passe aléatoire de 8 caractères
+    chars = string.ascii_letters + string.digits
+    password = ''.join(random.choice(chars) for _ in range(8))
+    
+    return username, password
 
 
 def main():
@@ -40,9 +71,12 @@ def main():
     # Générer la clé
     license_key = generate_license_key(client_name, machine_id)
     
+    # Générer les identifiants par défaut
+    username, password = generate_default_credentials(client_name)
+    
     print()
     print("=" * 60)
-    print("✅ CLÉ SÉCURISÉE GÉNÉRÉE")
+    print("✅ CLÉ SÉCURISÉE ET IDENTIFIANTS GÉNÉRÉS")
     print("=" * 60)
     print()
     print(f"Client: {client_name}")
@@ -51,12 +85,20 @@ def main():
     print()
     print(f"🔐 CLÉ: {license_key}")
     print()
-    print("=" * 60)
+    print("━" * 60)
+    print("👤 IDENTIFIANTS PAR DÉFAUT")
+    print("━" * 60)
+    print(f"   Nom d'utilisateur: {username}")
+    print(f"   Mot de passe:      {password}")
+    print()
+    print("⚠️  Le client peut changer ces identifiants après connexion")
+    print("━" * 60)
     print()
     print("Instructions:")
-    print("1. Envoyez cette clé à votre client.")
-    print("2. Elle ne fonctionnera QUE sur sa machine.")
+    print("1. Envoyez la CLÉ, le NOM D'UTILISATEUR et le MOT DE PASSE au client.")
+    print("2. La clé ne fonctionnera QUE sur sa machine.")
     print("3. S'il change de PC, il faudra une nouvelle clé.")
+    print("4. Le client peut changer son mot de passe dans les paramètres.")
     print()
     print("📧 Contact: DamDev Solutions")
     print()

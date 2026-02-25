@@ -61,7 +61,16 @@ class BackupManager:
                 zip_path = destination / f"{backup_name}.zip"
                 
                 with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                    # 1. Add Database
                     zipf.write(db_backup_path, db_backup_path.name)
+                    
+                    # 2. Add Shortcut Images
+                    shortcuts_images_dir = config.DATA_DIR / "shortcuts_images"
+                    if shortcuts_images_dir.exists():
+                        for img_file in shortcuts_images_dir.glob("*"):
+                            if img_file.is_file():
+                                # Add to zip inside a 'shortcuts_images' folder
+                                zipf.write(img_file, arcname=f"shortcuts_images/{img_file.name}")
                 
                 # Supprimer le fichier .db non compressé
                 db_backup_path.unlink()
@@ -119,6 +128,18 @@ class BackupManager:
             # Restaurer
             success = db.restore_database(db_file)
             
+            # Restaurer les images si présentes
+            if success and backup_path.suffix == '.zip':
+                temp_img_dir = temp_dir / "shortcuts_images"
+                if temp_img_dir.exists():
+                    target_img_dir = config.DATA_DIR / "shortcuts_images"
+                    target_img_dir.mkdir(exist_ok=True)
+                    
+                    # Copier les images extraites
+                    for img in temp_img_dir.glob("*"):
+                        if img.is_file():
+                            shutil.copy2(img, target_img_dir / img.name)
+                            
             # Nettoyer le dossier temporaire si créé
             if backup_path.suffix == '.zip':
                 shutil.rmtree(temp_dir)

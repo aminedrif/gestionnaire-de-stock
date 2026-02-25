@@ -14,6 +14,7 @@ from core.auth import auth_manager
 from core.logger import logger
 from ui.purchase_dialog import PurchaseDialog
 from core.i18n import i18n_manager
+from core.data_signals import data_signals
 
 class SupplierFormDialog(QDialog):
     """Dialogue d'ajout/modification de fournisseur"""
@@ -145,6 +146,7 @@ class DebtPaymentDialog(QDialog):
         )
         
         if success:
+            _ = i18n_manager.get
             QMessageBox.information(self, _("title_success"), msg)
             self.accept()
         else:
@@ -159,6 +161,7 @@ class SuppliersPage(QWidget):
         self.load_suppliers()
         
         i18n_manager.language_changed.connect(self.update_ui_text)
+        data_signals.suppliers_changed.connect(self.load_suppliers)
         self.update_ui_text()
         
     def init_ui(self):

@@ -288,6 +288,47 @@ class PrinterManager:
             logger.error(error_msg)
             return False, error_msg, None
 
+    def print_return_ticket(self, return_data: Dict, method: str = None) -> tuple[bool, str]:
+        """
+        Imprimer un ticket de RETOUR
+        """
+        method = method or self.printer_config.get('default_printer', 'DIRECT')
+        method = method.upper()
+        
+        try:
+            if method == 'THERMAL':
+                if not ESCPOS_AVAILABLE:
+                    return False, "Module python-escpos non installé"
+                
+                if not self.thermal_printer and not self.setup_thermal_printer():
+                    return False, "Imprimante thermique non configurée"
+                
+                text = receipt_generator.generate_return_text_receipt(return_data)
+                self.thermal_printer.text(text)
+                self.thermal_printer.cut()
+                return True, "Ticket de retour imprimé"
+                
+            else:
+                # Générer PDF
+                receipts_dir = config.DATA_DIR / "receipts"
+                receipts_dir.mkdir(exist_ok=True)
+                
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = f"return_ticket_{return_data['return_number']}_{timestamp}.pdf"
+                output_path = receipts_dir / filename
+                
+                receipt_generator.generate_return_pdf_receipt(return_data, output_path)
+                
+                # Ouvrir le PDF automatiquement
+                import os
+                os.startfile(str(output_path))
+                
+                return True, f"Ticket de retour PDF généré: {filename}"
+                
+        except Exception as e:
+            logger.error(f"Erreur impression retour: {e}")
+            return False, f"Erreur: {str(e)}"
+
 
 # Instance globale
 printer_manager = PrinterManager()

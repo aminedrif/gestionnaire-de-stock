@@ -322,6 +322,32 @@ CREATE INDEX IF NOT EXISTS idx_customer_credit_customer ON customer_credit_trans
 CREATE INDEX IF NOT EXISTS idx_customer_credit_date ON customer_credit_transactions(transaction_date);
 
 -- ============================================================================
+-- TABLE: pos_shortcuts (Raccourcis POS personnalisables)
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS pos_shortcuts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_id INTEGER,
+    label TEXT NOT NULL,
+    image_path TEXT,
+    unit_price REAL NOT NULL,
+    position INTEGER NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_pos_shortcuts_position ON pos_shortcuts(position);
+CREATE INDEX IF NOT EXISTS idx_pos_shortcuts_product ON pos_shortcuts(product_id);
+
+-- Trigger: Mettre à jour updated_at pour pos_shortcuts
+CREATE TRIGGER IF NOT EXISTS update_pos_shortcuts_timestamp 
+AFTER UPDATE ON pos_shortcuts
+BEGIN
+    UPDATE pos_shortcuts SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+END;
+
+-- ============================================================================
 -- TABLE: audit_log (Journal des actions)
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS audit_log (
@@ -516,3 +542,10 @@ INSERT OR IGNORE INTO settings (setting_key, setting_value, setting_type, descri
 ('default_language', 'fr', 'string', 'Langue par défaut'),
 ('auto_backup', '1', 'boolean', 'Sauvegarde automatique activée'),
 ('low_stock_alert', '1', 'boolean', 'Alertes stock faible activées');
+
+-- ============================================================================
+-- CAISSE/COFFRE TABLES
+-- NOTE: postes, cash_sessions, cash_movements, safe_transactions tables are
+-- created and migrated by db_manager._migrate_caisse_coffre_v2() to handle
+-- schema evolution properly. Do not create them here.
+-- ============================================================================

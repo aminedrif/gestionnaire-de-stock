@@ -13,6 +13,7 @@ from modules.sales.printer import printer_manager
 from core.auth import auth_manager
 from core.logger import logger
 from core.i18n import i18n_manager
+from core.data_signals import data_signals
 from core.logger import logger
 from database.db_manager import db
 from PyQt5.QtCore import pyqtSignal
@@ -92,6 +93,7 @@ class SalesHistoryPage(QWidget):
         self.load_sales()
         
         i18n_manager.language_changed.connect(self.update_ui_text)
+        data_signals.sales_changed.connect(self.load_sales)
         self.update_ui_text()
         
     def init_ui(self):

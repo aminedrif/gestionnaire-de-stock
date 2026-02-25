@@ -9,6 +9,7 @@ from PyQt5.QtCore import Qt, pyqtSignal, QPropertyAnimation, QEasingCurve
 from PyQt5.QtGui import QFont, QColor
 from datetime import datetime
 from core.i18n import i18n_manager
+from core.data_signals import data_signals
 
 class StatCard(QFrame):
     """Carte de statistique moderne"""
@@ -184,6 +185,10 @@ class HomePage(QWidget):
         
         # Connect to language change
         i18n_manager.language_changed.connect(self.update_ui_text)
+        
+        # Connect to data signals
+        data_signals.products_changed.connect(self.load_stats)
+        data_signals.sales_changed.connect(self.load_stats)
     
     def init_ui(self):
         """Initialiser l'interface"""
@@ -256,6 +261,7 @@ class HomePage(QWidget):
         btn_pos.clicked.connect(lambda: self.navigate_to.emit("pos"))
         access_layout.addWidget(btn_pos)
         
+
         btn_products = QuickAccessButton("📦", _('qa_products_title'), _('qa_products_sub'), "#3b82f6")
         btn_products.clicked.connect(lambda: self.navigate_to.emit("products"))
         access_layout.addWidget(btn_products)
@@ -271,6 +277,8 @@ class HomePage(QWidget):
         btn_reports = QuickAccessButton("📊", _('qa_reports_title'), _('qa_reports_sub'), "#ef4444")
         btn_reports.clicked.connect(lambda: self.navigate_to.emit("reports"))
         access_layout.addWidget(btn_reports)
+
+
         
         main_layout.addLayout(access_layout)
         
@@ -485,7 +493,7 @@ class HomePage(QWidget):
             # Alertes stock faible (seuil = 10 par défaut)
             alerts = db.fetch_one("""
                 SELECT COUNT(*) as count FROM products 
-                WHERE is_active = 1 AND stock_quantity <= 10
+                WHERE is_active = 1 AND stock_quantity <= min_stock_level AND parent_product_id IS NULL
             """)
             if alerts:
                 self.stat_alerts.update_value(str(alerts['count']))
@@ -503,15 +511,16 @@ class HomePage(QWidget):
     
     def update_ui_text(self):
         """Mettre à jour les textes de l'interface lors du changement de langue"""
-        # Save current layout state
-        old_layout = self.layout()
+        # Cleanly remove the existing container
+        if hasattr(self, 'container') and self.container:
+            self.layout().removeWidget(self.container)
+            self.container.deleteLater()
+            self.container = None
         
-        # Clear the current layout
-        if old_layout:
-            self._clear_layout(old_layout)
-        
-        # Rebuild the UI with new translations
-        self.init_ui()
+        # Re-create container and build UI
+        self.container = QWidget()
+        self.layout().addWidget(self.container)
+        self.build_ui_content(self.container)
         self.load_stats()
         
         # Update layout direction for RTL
@@ -522,18 +531,4 @@ class HomePage(QWidget):
             
         # Force update
         self.update()
-    
-    def _clear_layout(self, layout):
-        """Recursively clear a layout"""
-        if layout is None:
-            return
-            
-        while layout.count():
-            item = layout.takeAt(0)
-            widget = item.widget()
-            if widget:
-                widget.deleteLater()
-            elif item.layout():
-                self._clear_layout(item.layout())
-                # Delete the sub-layout object
-                item.layout().deleteLater()
+

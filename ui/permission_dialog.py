@@ -8,6 +8,7 @@ from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 from core.auth import auth_manager
+from core.i18n import i18n_manager
 import config
 
 class PermissionDialog(QDialog):
@@ -21,10 +22,11 @@ class PermissionDialog(QDialog):
         self.permissions_state = {} # Key: Checkbox
         
         self.setWindowTitle(f"Permissions: {username}")
-        self.resize(500, 600)
+        self.resize(500, 700)
         self.init_ui()
         
     def init_ui(self):
+        _ = i18n_manager.get
         layout = QVBoxLayout(self)
         
         # Header
@@ -53,29 +55,27 @@ class PermissionDialog(QDialog):
         default_perms = config.PERMISSIONS.get(self.role, [])
         pass_all_perms = set(config.PERMISSIONS['admin']) # Use admin set as superset of all meaningful perms
         
-        # Group by category (simplified mapping)
+        # Group by category (updated with new permissions)
         categories = {
-            "Ventes & Caisse": ["make_sales", "process_returns"],
-            "Produits & Stock": ["manage_products", "view_products", "manage_categories"],
-            "Partenaires": ["manage_customers", "view_customers", "manage_suppliers", "view_suppliers"],
-            "Administration": ["manage_users", "manage_settings", "view_reports", "manage_backups", "view_audit_log"]
+            "🛒 Ventes & Caisse": ["make_sales", "process_returns", "cancel_sales", "view_sales_history", "manage_shortcuts"],
+            "📦 Produits & Stock": ["manage_products", "view_products", "manage_categories"],
+            "👥 Partenaires": ["manage_customers", "view_customers", "manage_suppliers", "view_suppliers", "override_credit_limit"],
+            "💰 Trésorerie": ["manage_finance"],
+            "🛡️ Administration": ["manage_users", "manage_settings", "view_reports", "manage_backups", "view_audit_log", "manage_reset"]
         }
         
         for category, perms in categories.items():
             cat_label = QLabel(category)
-            cat_label.setStyleSheet("font-weight: bold; color: #2c3e50; margin-top: 10px;")
+            cat_label.setStyleSheet("font-weight: bold; color: #2c3e50; margin-top: 10px; font-size: 14px; border-bottom: 1px solid #eee; padding-bottom: 5px;")
             content_layout.addWidget(cat_label)
             
             for perm in perms:
+                # Always show all permissions available in the system (using admin set as reference)
                 if perm not in pass_all_perms and self.role != 'admin':
-                    # Skip check if it's strictly an admin perm usually not relevant for cashier override?
-                    # actually let's show all, allowing a cashier to do admin stuff might be intended
+                    # If it's a super-special permission not even admin has by default (unlikely), show it anyway
                     pass
 
                 # Check state determination
-                # 1. If in user_perms, use that value
-                # 2. Else use role default
-                
                 is_checked = False
                 is_default = True # Visual indicator
                 
@@ -123,24 +123,9 @@ class PermissionDialog(QDialog):
         layout.addLayout(btn_layout)
         
     def format_perm_name(self, perm):
-        """Format technical name to readable"""
-        mapping = {
-            "make_sales": "Effectuer des ventes",
-            "process_returns": "Effectuer des retours",
-            "manage_products": "Gérer les produits (Ajout/Modif)",
-            "view_products": "Voir les produits",
-            "manage_categories": "Gérer les catégories",
-            "manage_customers": "Gérer les clients",
-            "view_customers": "Voir les clients",
-            "manage_suppliers": "Gérer les fournisseurs",
-            "view_suppliers": "Voir les fournisseurs",
-            "manage_users": "Gérer les utilisateurs",
-            "view_reports": "Voir les rapports",
-            "manage_settings": "Modifier les paramètres",
-            "manage_backups": "Gérer les sauvegardes",
-            "view_audit_log": "Voir le journal d'audit"
-        }
-        return mapping.get(perm, perm)
+        """Format technical name to readable using i18n"""
+        key = f"perm_{perm}"
+        return i18n_manager.get(key, perm)
         
     def reset_to_default(self):
         """Reset checkboxes to role defaults"""
