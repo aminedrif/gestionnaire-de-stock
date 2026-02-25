@@ -284,4 +284,5 @@ Développé pour la gestion professionnelle de mini-market
 
 **Version**: 1.0.0  
 **Date**: Décembre 2025
-**Contact**: Amine.drif@gmail.com
+
+**Contact**: Amine.drif2002@gmail.com
