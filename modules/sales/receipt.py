@@ -152,146 +152,132 @@ class ReceiptGenerator:
         """
         try:
             # Calcul de la hauteur nécessaire (dynamique)
-            base_height = 70  # mm (en-tête + infos de base + totaux + pied)
+            base_height = 80  # mm (en-tête + infos + totaux + pied)
             
-            # Ajouter 3mm si y'a un client
+            # Ajouter 4mm si y'a un client
             if sale_data.get('customer_name'):
-                base_height += 3
+                base_height += 4
                 
-            # Ajouter la hauteur pour chaque article (nom + prix)
+            # Ajouter la hauteur pour chaque article (nom sur une ligne, prix sur l'autre)
             for item in sale_data['items']:
-                base_height += 6
+                base_height += 9
                 if item.get('discount_percentage', 0) > 0:
-                    base_height += 2.5
+                    base_height += 4
             
             # Créer le PDF - Format ticket 80mm x Hauteur dynamique
             c = canvas.Canvas(str(output_path), pagesize=(80*mm, base_height*mm))
             
-            # Position de départ
-            y = (base_height - 6) * mm
+            # Position de départ (descendant)
+            y = (base_height - 10) * mm
             x_center = 40 * mm
             
-            # En-tête
-            c.setFont("Helvetica-Bold", 12)
+            # En-tête : Nom du magasin en gras
+            c.setFont("Helvetica-Bold", 18)
             c.drawCentredString(x_center, y, self.store_config['name'])
-            y -= 4.5 * mm
+            y -= 7 * mm
             
-            c.setFont("Helvetica", 6)
-            c.drawCentredString(x_center, y, self.store_config['address'])
-            y -= 3 * mm
-            c.drawCentredString(x_center, y, self.store_config['phone'])
-            y -= 3 * mm
-            
-            if self.store_config.get('tax_id'):
-                c.drawCentredString(x_center, y, f"NIF: {self.store_config['tax_id']}")
-                y -= 3 * mm
-            if self.store_config.get('nis'):
-                c.drawCentredString(x_center, y, f"NIS: {self.store_config['nis']}")
-                y -= 3 * mm
-            if self.store_config.get('rc'):
-                c.drawCentredString(x_center, y, f"RC: {self.store_config['rc']}")
-                y -= 3 * mm
-            if self.store_config.get('ai'):
-                c.drawCentredString(x_center, y, f"AI: {self.store_config['ai']}")
-                y -= 3 * mm
+            # Type de ticket
+            c.setFont("Helvetica-Bold", 14)
+            c.drawCentredString(x_center, y, "TICKET DE CAISSE")
+            y -= 10 * mm
             
             # Ligne de séparation
-            y -= 1 * mm
-            c.line(3*mm, y, 77*mm, y)
-            y -= 3 * mm
+            c.line(5*mm, y, 75*mm, y)
+            y -= 5 * mm
             
-            # Informations de vente
-            c.setFont("Helvetica", 6)
-            c.drawString(3*mm, y, f"N°: {sale_data['sale_number']}")
-            c.drawRightString(77*mm, y, f"{sale_data.get('sale_date', datetime.now().strftime('%d/%m/%Y %H:%M'))}")
-            y -= 3 * mm
-            c.drawString(3*mm, y, f"Caissier: {sale_data.get('cashier_name', 'N/A')}")
-            y -= 3 * mm
-            
-            if sale_data.get('customer_name'):
-                c.drawString(3*mm, y, f"Client: {sale_data['customer_name']}")
-                y -= 3 * mm
-            
-            # Ligne de séparation
-            y -= 1 * mm
-            c.line(3*mm, y, 77*mm, y)
-            y -= 3 * mm
-            
-            # Articles
-            c.setFont("Helvetica", 6)
-            for item in sale_data['items']:
-                name = item['product_name'][:30]
-                c.drawString(3*mm, y, name)
-                y -= 2.5 * mm
-                
-                qty_price = f"{item['quantity']} x {item['unit_price']:.2f}"
-                total_str = f"{item['subtotal']:.2f} DA"
-                c.drawString(5*mm, y, qty_price)
-                c.drawRightString(77*mm, y, total_str)
-                y -= 3 * mm
-                
-                if item.get('discount_percentage', 0) > 0:
-                    c.drawString(5*mm, y, f"Promo: -{item['discount_percentage']}%")
-                    y -= 2.5 * mm
-            
-            # Ligne de séparation
-            y -= 1 * mm
-            c.line(3*mm, y, 77*mm, y)
-            y -= 3 * mm
-            
-            # Totaux
-            c.setFont("Helvetica", 7)
-            c.drawString(3*mm, y, "Sous-total:")
-            c.drawRightString(77*mm, y, f"{sale_data['subtotal']:.2f} DA")
-            y -= 3 * mm
-            
-            if sale_data.get('discount_amount', 0) > 0:
-                c.drawString(3*mm, y, "Réduction:")
-                c.drawRightString(77*mm, y, f"-{sale_data['discount_amount']:.2f} DA")
-                y -= 3 * mm
-            
-            # Total
-            c.setFont("Helvetica-Bold", 9)
-            c.drawString(3*mm, y, "TOTAL:")
-            c.drawRightString(77*mm, y, f"{sale_data['total_amount']:.2f} DA")
+            # Informations de vente (alignées à gauche)
+            c.setFont("Helvetica", 8)
+            c.drawString(5*mm, y, f"N° Ticket: {sale_data['sale_number']}")
+            y -= 4 * mm
+            c.drawString(5*mm, y, f"Date: {sale_data.get('sale_date', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))}")
+            y -= 4 * mm
+            c.drawString(5*mm, y, f"Caissier: {sale_data.get('cashier_name', 'N/A')}")
             y -= 4 * mm
             
-            # Paiement
-            c.setFont("Helvetica", 6)
+            if self.store_config.get('customer_name'):
+                c.drawString(5*mm, y, f"Client: {sale_data['customer_name']}")
+                y -= 4 * mm
+            
+            # Ligne de séparation
+            y -= 2 * mm
+            c.line(5*mm, y, 75*mm, y)
+            y -= 5 * mm
+            
+            # Section Articles
+            c.setFont("Helvetica-Bold", 9)
+            c.drawString(5*mm, y, "Articles")
+            y -= 5 * mm
+            
+            c.setFont("Helvetica", 7)
+            for item in sale_data['items']:
+                # Ligne 1: Nom de l'article
+                name = item['product_name'][:35]
+                c.drawString(5*mm, y, name)
+                y -= 3.5 * mm
+                
+                # Ligne 2: Quantité x Prix Unitaire       Total
+                qty_price = f"{item['quantity']} x {item['unit_price']:.2f} DA"
+                total_str = f"{item['subtotal']:.2f} DA"
+                
+                c.drawString(8*mm, y, qty_price)
+                c.drawRightString(75*mm, y, total_str)
+                y -= 4 * mm
+                
+                # Réduction éventuelle
+                if item.get('discount_percentage', 0) > 0:
+                    c.drawString(8*mm, y, f"Promo: -{item['discount_percentage']}%")
+                    y -= 4 * mm
+            
+            # Ligne de séparation avant totaux
+            y -= 2 * mm
+            c.line(5*mm, y, 75*mm, y)
+            y -= 5 * mm
+            
+            # Sous-total et Réductions globales
+            if sale_data.get('discount_amount', 0) > 0:
+                c.setFont("Helvetica", 8)
+                c.drawString(5*mm, y, "Sous-total:")
+                c.drawRightString(75*mm, y, f"{sale_data['subtotal']:.2f} DA")
+                y -= 4 * mm
+                
+                c.drawString(5*mm, y, "Réduction:")
+                c.drawRightString(75*mm, y, f"-{sale_data['discount_amount']:.2f} DA")
+                y -= 5 * mm
+            
+            # TOTAL
+            y -= 1 * mm
+            c.setFont("Helvetica-Bold", 11)
+            c.drawString(5*mm, y, "TOTAL:")
+            c.drawRightString(75*mm, y, f"{sale_data['total_amount']:.2f} DA")
+            y -= 6 * mm
+            
+            # Mode de paiement et infos rendu
             payment_method = sale_data.get('payment_method', 'cash')
-            payment_labels = {
-                'cash': 'Espèces',
-                'card': 'Carte',
-                'credit': 'Crédit',
-                'mixed': 'Mixte'
-            }
-            
-            c.drawString(3*mm, y, f"Mode: {payment_labels.get(payment_method, payment_method)}")
-            y -= 3 * mm
-            
             if payment_method != 'credit':
+                c.setFont("Helvetica", 7)
                 paid = sale_data.get('amount_paid', sale_data['total_amount'])
                 change = sale_data.get('change_amount', 0)
                 
-                c.drawString(3*mm, y, f"Payé: {paid:.2f} DA")
+                c.drawString(5*mm, y, f"Payé: {paid:.2f} DA")
                 if change > 0:
-                    c.drawRightString(77*mm, y, f"Rendu: {change:.2f} DA")
-                y -= 3 * mm
+                    c.drawRightString(75*mm, y, f"Rendu: {change:.2f} DA")
+                y -= 5 * mm
             
-            # Pied de page
+            # Message de fin (optionnel, plus bas)
             y -= 2 * mm
-            c.setFont("Helvetica", 6)
+            c.setFont("Helvetica", 7)
             footer_msg = config.DEFAULT_MESSAGES.get(self.language, {}).get(
                 'receipt_footer', 'Merci pour votre visite !'
             )
             c.drawCentredString(x_center, y, footer_msg)
-            y -= 3 * mm
-            c.setFont("Helvetica", 5)
-            c.drawCentredString(x_center, y, datetime.now().strftime('%d/%m/%Y %H:%M:%S'))
+            
+            # Pied de page clair avec date
+            y -= 5 * mm
+            c.setFont("Helvetica", 7)
+            c.drawCentredString(x_center, y, datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
             
             # Sauvegarder le PDF
             c.save()
-            
             return True
             
         except Exception as e:
@@ -654,11 +640,23 @@ class ReceiptGenerator:
             True si succès
         """
         try:
+            # Calcul de la hauteur nécessaire (dynamique)
+            base_height = 80  # mm
+            
+            if return_data.get('customer_name'):
+                base_height += 4
+                
+            for item in return_data['items']:
+                base_height += 8
+                
+            if return_data.get('reason'):
+                base_height += 5
+                
             # Créer le PDF
-            c = canvas.Canvas(str(output_path), pagesize=(80*mm, 297*mm))
+            c = canvas.Canvas(str(output_path), pagesize=(80*mm, base_height*mm))
             
             # Position de départ
-            y = 280 * mm
+            y = (base_height - 10) * mm
             x_center = 40 * mm
             
             # En-tête
@@ -674,13 +672,13 @@ class ReceiptGenerator:
             c.line(5*mm, y, 75*mm, y)
             y -= 5 * mm
             
-            # Informations
+            # Informations (alignées à gauche)
             c.setFont("Helvetica", 8)
             c.drawString(5*mm, y, f"N° Retour: {return_data['return_number']}")
             y -= 4 * mm
             c.drawString(5*mm, y, f"Origine: {return_data.get('original_sale_number', 'N/A')}")
             y -= 4 * mm
-            c.drawString(5*mm, y, f"Date: {return_data.get('return_date', datetime.now().strftime('%Y-%m-%d %H:%M'))}")
+            c.drawString(5*mm, y, f"Date: {return_data.get('return_date', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))}")
             y -= 4 * mm
             c.drawString(5*mm, y, f"Caissier: {return_data.get('cashier_name', 'N/A')}")
             y -= 4 * mm
@@ -701,15 +699,11 @@ class ReceiptGenerator:
             
             c.setFont("Helvetica", 7)
             for item in return_data['items']:
-                # Nom du produit
                 name = item['product_name'][:35]
                 c.drawString(5*mm, y, name)
                 y -= 3.5 * mm
                 
-                # Quantité, prix unitaire et total
-                # Utiliser quantity_returned si disponible
                 qty = item.get('quantity_returned', item.get('quantity', 0))
-                # Utiliser subtotal si disponible
                 item_total = item.get('subtotal', item.get('return_amount', 0))
                 
                 qty_price = f"{qty} x {item['unit_price']:.2f} DA"
@@ -737,8 +731,8 @@ class ReceiptGenerator:
                 c.drawString(5*mm, y, f"Raison: {return_data['reason']}")
                 y -= 5 * mm
             
-            # Pied de page
-            y -= 10 * mm
+            # Pied de page clair avec date
+            y -= 5 * mm
             c.setFont("Helvetica", 7)
             c.drawCentredString(x_center, y, datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
             
