@@ -170,7 +170,7 @@ class ProductFormDialog(QDialog):
             self.description_edit.setText(self.product.get('description', ''))
             self.purchase_price_spin.setValue(self.product.get('purchase_price', 0))
             self.selling_price_spin.setValue(self.product.get('selling_price', 0))
-            self.stock_spin.setValue(self.product.get('stock_quantity', 0))
+            self.stock_spin.setValue(int(self.product.get('stock_quantity', 0)))
             self.min_stock_spin.setValue(self.product.get('min_stock_level', 10))
             
             # Select Supplier
@@ -237,7 +237,8 @@ class ProductFormDialog(QDialog):
             # Auto-create Unit product if checkbox is checked
             if success and self.auto_create_unit_check.isChecked() and self.unit_price_spin.value() > 0:
                 unit_name = f"{self.name_edit.text()}{_('unit_suffix_fr')}"
-                unit_barcode = f"{self.barcode_edit.text()}-U" if self.barcode_edit.text() else None
+                # Use the product's own barcode if it has one; only auto-generate if empty
+                unit_barcode = self.barcode_edit.text() + "-U" if self.barcode_edit.text() and not product_manager.get_product_by_barcode(self.barcode_edit.text() + "-U") else None
                 
                 name_ar = self.name_ar_edit.text()
                 unit_name_ar = f"{name_ar}{_('unit_suffix_ar')}" if name_ar else None
