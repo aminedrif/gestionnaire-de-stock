@@ -468,6 +468,9 @@ class POSPage(QWidget):
         # Refresh shortcuts
         if hasattr(self, 'load_shortcuts'):
             self.load_shortcuts()
+        # Auto-focus barcode scanner input
+        from PyQt5.QtCore import QTimer
+        QTimer.singleShot(100, lambda: self.barcode_input.setFocus())
     
     def keyPressEvent(self, event):
         """Handle keyboard shortcuts for POS"""
@@ -1033,22 +1036,32 @@ class POSPage(QWidget):
                 border: 2px solid #e5e7eb;
                 border-radius: 12px;
                 gridline-color: #f3f4f6;
-                color: #1f2937;
-                background-color: white;
-                selection-background-color: #ede9fe;
+                color: #1a1a2e;
+                background-color: #ffffff;
+                selection-background-color: #ddd6fe;
+                selection-color: #1a1a2e;
+                alternate-background-color: #f5f3ff;
+                font-size: 14px;
             }
             QHeaderView::section {
-                background-color: #f5f3ff;
+                background-color: #7c3aed;
                 padding: 10px;
                 font-weight: bold;
-                color: #6b21a8;
+                color: #ffffff;
                 border: none;
-                border-bottom: 2px solid #e5e7eb;
+                border-bottom: 2px solid #6d28d9;
+                font-size: 13px;
             }
             QTableWidget::item {
                 padding: 8px;
+                color: #1a1a2e;
+            }
+            QTableWidget::item:selected {
+                background-color: #ddd6fe;
+                color: #1a1a2e;
             }
         """)
+        self.cart_table.setAlternatingRowColors(True)
         # Enable row selection and keyboard navigation
         self.cart_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.cart_table.setSelectionMode(QAbstractItemView.SingleSelection)
@@ -1770,12 +1783,19 @@ class POSPage(QWidget):
                         self._delete_selected_item()
                         self.barcode_input.clear()
                 else:
-                    QMessageBox.warning(self, "Produit introuvable", 
-                                      f"Aucun produit avec le code-barres: {barcode}")
+                    QMessageBox.warning(self, "❌ Produit n'existe pas", 
+                                      f"Le produit avec le code-barres\n"
+                                      f"'{barcode}'\n"
+                                      f"n'existe pas dans la liste des produits.\n\n"
+                                      f"Vérifiez le code-barres ou ajoutez le produit.")
                     self.barcode_input.clear()
         except Exception as e:
             logger.error(f"Erreur scan produit: {e}")
             QMessageBox.critical(self, "Erreur", f"Erreur lors du scan: {e}")
+        finally:
+            # Always refocus the barcode input for continuous scanning
+            from PyQt5.QtCore import QTimer
+            QTimer.singleShot(50, lambda: self.barcode_input.setFocus())
     
     def on_barcode_text_changed(self, text):
         """Démarrer le timer pour auto-scan"""
@@ -1929,7 +1949,9 @@ class POSPage(QWidget):
         row_count = self.cart_table.rowCount()
         if row_count > 0:
             self.cart_table.selectRow(row_count - 1)
-            self.cart_table.setFocus()
+            # Don't steal focus from barcode input - keep scanner ready
+            if not self.barcode_input.hasFocus():
+                self.barcode_input.setFocus()
     
     def remove_from_cart(self, product_id):
         """Retirer un produit du panier"""
