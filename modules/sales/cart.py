@@ -67,6 +67,18 @@ class Cart:
             
         # Check parent (Auto-Open logic)
         parent_id = product.get('parent_product_id')
+        
+        # If no parent_id set, try to find parent by name pattern (e.g. "X (Unité)" -> "X")
+        if not parent_id:
+            name = product.get('name', '')
+            for suffix in [' (Unité)', ' (Unite)', ' (unité)', ' (unite)']:
+                if name.endswith(suffix):
+                    parent_name = name[:-len(suffix)]
+                    parent = product_manager.get_product_by_name(parent_name)
+                    if parent:
+                        parent_id = parent['id']
+                    break
+        
         if parent_id:
             parent = product_manager.get_product(parent_id)
             if parent:
