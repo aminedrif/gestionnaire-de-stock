@@ -140,8 +140,26 @@ class ProductFormDialog(QDialog):
         self.packing_qty_spin.setValue(20)
         price_layout.addRow(_("label_packing_qty"), self.packing_qty_spin)
 
-        
+        price_layout.addRow(QLabel(""))
+        price_layout.addRow(QLabel(f"<b>Liaison Manuelle</b>"))
 
+        # Parent Product Combo
+        self.parent_combo = QComboBox()
+        self.parent_combo.setEditable(True)
+        self.parent_combo.setInsertPolicy(QComboBox.NoInsert)
+        self.parent_combo.completer().setCompletionMode(QCompleter.PopupCompletion)
+        self.parent_combo.addItem("", None)
+        
+        all_products = product_manager.get_all_products()
+        for p in all_products:
+            # Ne pas s'ajouter soi-même comme parent, ni ajouter des enfants existants
+            if self.product and p['id'] == self.product['id']:
+                continue
+            if p.get('parent_product_id'):
+                continue
+            self.parent_combo.addItem(p['name'], p['id'])
+            
+        price_layout.addRow(_("label_parent_product"), self.parent_combo)
         
         layout.addWidget(tabs)
         
@@ -196,6 +214,13 @@ class ProductFormDialog(QDialog):
             packing_qty = self.product.get('packing_quantity', 20)
             self.packing_qty_spin.setValue(packing_qty if packing_qty else 20)
             
+            # Select Parent Product
+            parent_id = self.product.get('parent_product_id')
+            if parent_id:
+                index = self.parent_combo.findData(parent_id)
+                if index >= 0:
+                    self.parent_combo.setCurrentIndex(index)
+            
             # Hide auto-create for existing products (edit mode)
             self.auto_create_unit_check.setVisible(False)
             self.unit_price_spin.setVisible(False)
@@ -224,7 +249,7 @@ class ProductFormDialog(QDialog):
             'supplier_id': self.supplier_combo.currentData(),
             'category_id': self.category_combo.currentData(),
             'is_tobacco': 0, # Removed feature
-            'parent_product_id': None, # Removed manual linking
+            'parent_product_id': self.parent_combo.currentData(),
             'packing_quantity': self.packing_qty_spin.value()
         }
 
