@@ -63,7 +63,7 @@ db.execute_query(
 )
 print("✓ Hash mis à jour dans la base de données")
 
-# 7. Vérifier à nouveau
+# 7. Vérifier à nouveau 2
 user_updated = db.fetch_one("SELECT password_hash FROM users WHERE username = 'admin'")
 print(f"Hash dans DB après update: {user_updated['password_hash'][:60]}...")
 print(f"Test final: {verify_password(password, user_updated['password_hash'])}")
