@@ -66,7 +66,7 @@ class ShortcutsManager:
     
     def add_shortcut(self, product_id: Optional[int], label: str, 
                      image_path: Optional[str], unit_price: float, 
-                     position: int, category_id: Optional[int] = None) -> tuple[bool, str, Optional[int]]:
+                     position: int) -> tuple[bool, str, Optional[int]]:
         """
         Ajouter un nouveau raccourci
         
@@ -76,7 +76,6 @@ class ShortcutsManager:
             image_path: Chemin de l'image (optionnel)
             unit_price: Prix unitaire
             position: Position du raccourci
-            category_id: ID de la catégorie (pour produits personnalisés)
             
         Returns:
             (succès, message, shortcut_id)
@@ -92,13 +91,13 @@ class ShortcutsManager:
                 return False, "Cette position est déjà occupée", None
             
             query = """
-                INSERT INTO pos_shortcuts (product_id, label, image_path, unit_price, position, category_id)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO pos_shortcuts (product_id, label, image_path, unit_price, position)
+                VALUES (?, ?, ?, ?, ?)
             """
             
             shortcut_id = db.execute_insert(
                 query, 
-                (product_id, label, image_path, unit_price, position, category_id)
+                (product_id, label, image_path, unit_price, position)
             )
             
             logger.info(f"Raccourci ajouté: {label} à la position {position}")
@@ -115,7 +114,7 @@ class ShortcutsManager:
         
         Args:
             shortcut_id: ID du raccourci
-            **kwargs: Champs à mettre à jour (product_id, label, image_path, unit_price, position, category_id)
+            **kwargs: Champs à mettre à jour (product_id, label, image_path, unit_price, position)
             
         Returns:
             (succès, message)
@@ -125,7 +124,7 @@ class ShortcutsManager:
             fields = []
             values = []
             
-            allowed_fields = ['product_id', 'label', 'image_path', 'unit_price', 'position', 'category_id']
+            allowed_fields = ['product_id', 'label', 'image_path', 'unit_price', 'position']
             
             for key, value in kwargs.items():
                 if key in allowed_fields:

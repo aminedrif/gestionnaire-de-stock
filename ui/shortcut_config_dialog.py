@@ -149,23 +149,6 @@ class ShortcutConfigDialog(QDialog):
         
         form_layout.addRow(_('product_label'), self.product_combo)
         
-        # 3. Catégorie (New - for custom items)
-        self.category_combo = QComboBox()
-        self.category_combo.setMinimumHeight(40)
-        self.category_combo.setPlaceholderText("Sélectionner une catégorie")
-        self.category_combo.setStyleSheet("""
-            QComboBox {
-                padding: 8px;
-                border: 2px solid #ddd;
-                border-radius: 6px;
-                font-size: 14px;
-            }
-            QComboBox:focus {
-                border-color: #3b82f6;
-            }
-        """)
-        self.load_categories()
-        form_layout.addRow(_('category_label'), self.category_combo)
         
         # 4. Libellé personnalisé
         self.label_input = QLineEdit()
@@ -322,27 +305,6 @@ class ShortcutConfigDialog(QDialog):
         except Exception as e:
             logger.error(f"Erreur lors du chargement des produits: {e}")
             
-    def load_categories(self):
-        """Charger la liste des catégories"""
-        try:
-            categories = db.execute_query("SELECT id, name, name_ar FROM categories ORDER BY name")
-            logger.info(f"Loaded {len(categories) if categories else 0} categories for shortcut dialog")
-            
-            self.category_combo.clear()
-            self.category_combo.addItem("-- Aucune --", None)
-            
-            if categories:
-                is_arabic = i18n_manager.current_language == 'ar'
-                for cat in categories:
-                    # Convert to dict for safe access
-                    cat_dict = dict(cat) if hasattr(cat, 'keys') else {'id': cat[0], 'name': cat[1], 'name_ar': cat[2] if len(cat) > 2 else None}
-                    display_name = cat_dict.get('name_ar') if is_arabic and cat_dict.get('name_ar') else cat_dict.get('name', 'Catégorie')
-                    self.category_combo.addItem(display_name, cat_dict.get('id'))
-            else:
-                logger.warning("No categories found in database")
-                
-        except Exception as e:
-            logger.error(f"Erreur lors du chargement des catégories: {e}")
 
     def on_barcode_scanned(self):
         """Gérer le scan de code-barres"""
@@ -372,10 +334,8 @@ class ShortcutConfigDialog(QDialog):
     def on_product_selected(self, index):
         """Gérer la sélection d'un produit"""
         if index <= 0:
-            # Mode Custom Item
-            self.category_combo.setEnabled(True)
             return
-        
+            
         product = self.product_combo.currentData()
         if product:
             # Remplir automatiquement le libellé si vide
@@ -385,20 +345,6 @@ class ShortcutConfigDialog(QDialog):
             # Remplir le prix
             self.price_input.setValue(product['selling_price'])
             
-            # Sélectionner la catégorie du produit si possible
-            if 'category_id' in product and product['category_id']:
-                cat_idx = -1
-                for i in range(self.category_combo.count()):
-                    if self.category_combo.itemData(i) == product['category_id']:
-                        cat_idx = i
-                        break
-                if cat_idx >= 0:
-                    self.category_combo.setCurrentIndex(cat_idx)
-            
-            # Disable category selection for linked products (it follows product)
-            # Or keep enabled if we want to override? Usually product category is fixed.
-            # self.category_combo.setEnabled(False) 
-    
     def upload_image(self):
         """Charger une image"""
         file_path, _ = QFileDialog.getOpenFileName(
@@ -455,13 +401,7 @@ class ShortcutConfigDialog(QDialog):
         else:
             self.product_combo.setCurrentIndex(0) # Custom
         
-        # Sélectionner la catégorie (New)
-        if self.shortcut_data.get('category_id'):
-             for i in range(self.category_combo.count()):
-                if self.category_combo.itemData(i) == self.shortcut_data['category_id']:
-                    self.category_combo.setCurrentIndex(i)
-                    break
-        
+
         # Remplir les champs
         self.label_input.setText(self.shortcut_data['label'])
         self.price_input.setValue(self.shortcut_data['unit_price'])
@@ -496,9 +436,6 @@ class ShortcutConfigDialog(QDialog):
         product = self.product_combo.currentData()
         product_id = product['id'] if product else None
         
-        # Category
-        cat_id = self.category_combo.currentData()
-        
         try:
             if self.shortcut_id:
                 # Mise à jour
@@ -507,8 +444,7 @@ class ShortcutConfigDialog(QDialog):
                     product_id=product_id,
                     label=label,
                     image_path=self.current_image_path,
-                    unit_price=price,
-                    category_id=cat_id
+                    unit_price=price
                 )
             else:
                 # Création
@@ -518,8 +454,7 @@ class ShortcutConfigDialog(QDialog):
                     label,
                     self.current_image_path,
                     price,
-                    position,
-                    category_id=cat_id
+                    position
                 )
             
             if success:
