@@ -395,6 +395,8 @@ class POSManager:
             data_signals.sales_changed.emit()
             data_signals.inventory_changed.emit()
             data_signals.product_changed.emit()
+            if payment_method in ('credit', 'mixed'):
+                data_signals.customers_changed.emit()
             return True, f"Vente réussie: {sale_code}", sale_id
             
         except Exception as e:

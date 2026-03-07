@@ -84,13 +84,16 @@ class ReturnDialog(QDialog):
         self.sale_data = None
         self.setup_ui()
         self.update_ui_text()
+        self.load_recent_sales()
         
     def setup_ui(self):
+        self.setMinimumSize(800, 600)
         layout = QVBoxLayout()
         
         # Recherche Vente
         search_layout = QHBoxLayout()
         self.sale_id_input = QLineEdit()
+        self.sale_id_input.returnPressed.connect(self.search_sale)
         self.sale_id_input_btn = QPushButton()
         self.sale_id_input_btn.clicked.connect(self.search_sale)
         
@@ -101,6 +104,26 @@ class ReturnDialog(QDialog):
         search_layout.addWidget(self.sale_id_input)
         search_layout.addWidget(self.sale_id_input_btn)
         layout.addLayout(search_layout)
+        
+        # Recent Sales Table
+        self.recent_sales_label = QLabel("📋 Ventes récentes (cliquez pour sélectionner)")
+        self.recent_sales_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #6366f1; margin-top: 5px;")
+        layout.addWidget(self.recent_sales_label)
+        
+        self.recent_sales_table = QTableWidget()
+        self.recent_sales_table.setColumnCount(5)
+        self.recent_sales_table.setHorizontalHeaderLabels(["ID", "N° Ticket", "Date", "Total", "Client"])
+        self.recent_sales_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.recent_sales_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.recent_sales_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.recent_sales_table.setMaximumHeight(200)
+        self.recent_sales_table.setStyleSheet("""
+            QTableWidget { font-size: 13px; border: 1px solid #e5e7eb; border-radius: 8px; }
+            QHeaderView::section { background-color: #f0f0f0; padding: 6px; font-weight: bold; }
+            QTableWidget::item:selected { background-color: #ddd6fe; }
+        """)
+        self.recent_sales_table.doubleClicked.connect(self.on_recent_sale_selected)
+        layout.addWidget(self.recent_sales_table)
         
         # Info Vente
         self.info_label = QLabel("")
@@ -117,17 +140,17 @@ class ReturnDialog(QDialog):
         # Actions
         btn_layout = QHBoxLayout()
         self.cancel_sale_btn = QPushButton()
-        self.cancel_sale_btn.setStyleSheet("background-color: #e74c3c; color: white;")
+        self.cancel_sale_btn.setStyleSheet("background-color: #e74c3c; color: white; padding: 8px 15px; border-radius: 6px;")
         self.cancel_sale_btn.clicked.connect(self.cancel_entire_sale)
         
         self.process_return_btn = QPushButton()
-        self.process_return_btn.setStyleSheet("background-color: #f39c12; color: white;")
+        self.process_return_btn.setStyleSheet("background-color: #f39c12; color: white; padding: 8px 15px; border-radius: 6px;")
         self.process_return_btn.clicked.connect(self.process_partial_return)
         
         btn_layout.addWidget(self.cancel_sale_btn)
         
         self.reprint_btn = QPushButton()
-        self.reprint_btn.setStyleSheet("background-color: #3498db; color: white;")
+        self.reprint_btn.setStyleSheet("background-color: #3498db; color: white; padding: 8px 15px; border-radius: 6px;")
         self.reprint_btn.clicked.connect(self.reprint_ticket)
         btn_layout.addWidget(self.reprint_btn)
         
@@ -135,6 +158,44 @@ class ReturnDialog(QDialog):
         layout.addLayout(btn_layout)
         
         self.setLayout(layout)
+    
+    def load_recent_sales(self):
+        """Load recent completed sales into the table"""
+        try:
+            from database.db_manager import db
+            query = """
+                SELECT s.id, s.sale_number, s.sale_date, s.total_amount, 
+                       COALESCE(c.full_name, 'Anonyme') as customer_name
+                FROM sales s
+                LEFT JOIN customers c ON s.customer_id = c.id
+                WHERE s.status = 'completed'
+                ORDER BY s.sale_date DESC
+                LIMIT 20
+            """
+            sales = db.execute_query(query)
+            self.recent_sales_table.setRowCount(0)
+            for sale in sales:
+                row = self.recent_sales_table.rowCount()
+                self.recent_sales_table.insertRow(row)
+                id_item = QTableWidgetItem(str(sale['id']))
+                id_item.setData(Qt.UserRole, sale['id'])
+                self.recent_sales_table.setItem(row, 0, id_item)
+                self.recent_sales_table.setItem(row, 1, QTableWidgetItem(sale['sale_number']))
+                self.recent_sales_table.setItem(row, 2, QTableWidgetItem(str(sale['sale_date'])))
+                self.recent_sales_table.setItem(row, 3, QTableWidgetItem(f"{sale['total_amount']:.2f} DA"))
+                self.recent_sales_table.setItem(row, 4, QTableWidgetItem(sale['customer_name']))
+        except Exception as e:
+            logger.error(f"Erreur chargement ventes récentes: {e}")
+    
+    def on_recent_sale_selected(self):
+        """Handle double-click on a recent sale"""
+        row = self.recent_sales_table.currentRow()
+        if row >= 0:
+            sale_id = self.recent_sales_table.item(row, 0).data(Qt.UserRole)
+            sale = pos_manager.get_sale(sale_id)
+            if sale:
+                self.sale_data = sale
+                self.display_sale()
 
     def update_ui_text(self):
         _ = i18n_manager.get
@@ -576,10 +637,8 @@ class POSPage(QWidget):
         self.print_receipt_cb.setText(_("checkbox_print_ticket"))
         
         # Update Payment Method Items
-        current_idx = self.payment_method.currentIndex()
-        self.payment_method.setItemText(0, _("payment_cash"))
-        self.payment_method.setItemText(1, _("payment_credit"))
-        self.payment_method.setCurrentIndex(current_idx)
+        self.btn_pay_cash.setText("💵 " + _("payment_cash"))
+        self.btn_pay_credit.setText("💳 " + _("payment_credit"))
         
         self.pay_btn.setText(_("btn_pay"))
         self.clear_btn.setText(_("btn_clear_cart"))
@@ -1019,6 +1078,26 @@ class POSPage(QWidget):
         self.clear_customer_btn.clicked.connect(self.clear_customer_selection)
         customer_layout.addWidget(self.clear_customer_btn)
         
+        # Bouton Nouveau Client (ajout direct depuis caisse)
+        self.add_customer_btn = QPushButton("➕")
+        self.add_customer_btn.setFixedSize(45, 45)
+        self.add_customer_btn.setToolTip("Ajouter un nouveau client")
+        self.add_customer_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #ecfdf5;
+                border: 2px solid #a7f3d0;
+                border-radius: 8px;
+                font-weight: bold;
+                font-size: 18px;
+                color: #059669;
+            }
+            QPushButton:hover {
+                background-color: #a7f3d0;
+            }
+        """)
+        self.add_customer_btn.clicked.connect(self.add_new_customer_from_pos)
+        customer_layout.addWidget(self.add_customer_btn)
+        
         layout.addLayout(customer_layout)
         
         # Panier
@@ -1082,7 +1161,7 @@ class POSPage(QWidget):
         # Totaux supprimés du panneau droit pour laisser plus de place au panier
         # (Déplacés vers le header gauche)
         
-        # Paiement
+        # Paiement - Boutons au lieu de ComboBox
         self.payment_group = QGroupBox(_("group_payment"))
         self.payment_group.setStyleSheet("""
             QGroupBox {
@@ -1096,23 +1175,68 @@ class POSPage(QWidget):
         """)
         payment_layout = QVBoxLayout()
         
-        self.payment_method = QComboBox()
-        self.payment_method.addItem(_("payment_cash"), "cash")
-        self.payment_method.addItem(_("payment_credit"), "credit")
-        self.payment_method.setMinimumHeight(40)
-        self.payment_method.setStyleSheet("""
-            QComboBox {
-                padding: 8px 12px;
-                border: 2px solid #e0e0e0;
-                border-radius: 6px;
-                font-size: 14px;
-                color: #333;
+        # Payment method buttons
+        payment_btn_layout = QHBoxLayout()
+        payment_btn_layout.setSpacing(8)
+        
+        self.btn_pay_cash = QPushButton("💵 " + _("payment_cash"))
+        self.btn_pay_cash.setMinimumHeight(50)
+        self.btn_pay_cash.setCheckable(True)
+        self.btn_pay_cash.setChecked(True)  # Default to cash
+        self.btn_pay_cash.setStyleSheet("""
+            QPushButton {
+                background-color: #f0fdf4;
+                border: 2px solid #86efac;
+                border-radius: 10px;
+                font-size: 15px;
+                font-weight: bold;
+                color: #166534;
             }
-            QComboBox QAbstractItemView {
-                color: #333;
+            QPushButton:checked {
+                background-color: #22c55e;
+                color: white;
+                border-color: #16a34a;
+            }
+            QPushButton:hover {
+                background-color: #bbf7d0;
+            }
+            QPushButton:checked:hover {
+                background-color: #16a34a;
             }
         """)
-        payment_layout.addWidget(self.payment_method)
+        self.btn_pay_cash.clicked.connect(lambda: self._set_payment_method('cash'))
+        payment_btn_layout.addWidget(self.btn_pay_cash)
+        
+        self.btn_pay_credit = QPushButton("💳 " + _("payment_credit"))
+        self.btn_pay_credit.setMinimumHeight(50)
+        self.btn_pay_credit.setCheckable(True)
+        self.btn_pay_credit.setStyleSheet("""
+            QPushButton {
+                background-color: #fef3c7;
+                border: 2px solid #fcd34d;
+                border-radius: 10px;
+                font-size: 15px;
+                font-weight: bold;
+                color: #92400e;
+            }
+            QPushButton:checked {
+                background-color: #f59e0b;
+                color: white;
+                border-color: #d97706;
+            }
+            QPushButton:hover {
+                background-color: #fde68a;
+            }
+            QPushButton:checked:hover {
+                background-color: #d97706;
+            }
+        """)
+        self.btn_pay_credit.clicked.connect(lambda: self._set_payment_method('credit'))
+        payment_btn_layout.addWidget(self.btn_pay_credit)
+        
+        self._current_payment_method = 'cash'
+        
+        payment_layout.addLayout(payment_btn_layout)
         
         # Checkbox pour imprimer le ticket
         self.print_receipt_cb = QCheckBox(_("checkbox_print_ticket"))
@@ -1256,40 +1380,35 @@ class POSPage(QWidget):
         return panel
     
     def create_shortcuts_grid(self):
-        """Créer la grille de raccourcis (Horizontal Scrollable)"""
-        from PyQt5.QtWidgets import QScrollArea
+        """Créer la grille de raccourcis (Grid Layout)"""
         
-        # Container principal (Scroll Area)
+        # Container with scroll for grid
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll_area.setFixedHeight(115) # Hauteur fixe pour la rangée
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll_area.setMaximumHeight(210)
         scroll_area.setStyleSheet("""
             QScrollArea {
                 border: 1px solid #e5e7eb;
                 border-radius: 8px;
                 background-color: #fafafa;
             }
-            QScrollBar:horizontal {
-                height: 8px;
+            QScrollBar:vertical {
+                width: 8px;
                 background: #f0f0f0;
             }
-            QScrollBar::handle:horizontal {
+            QScrollBar::handle:vertical {
                 background: #cbd5e1;
                 border-radius: 4px;
             }
-            QScrollBar::handle:horizontal:hover {
-                background: #94a3b8;
-            }
         """)
         
-        # Container interne pour les boutons
+        # Grid inner widget
         self.shortcuts_inner_widget = QWidget()
-        self.shortcuts_layout = QHBoxLayout(self.shortcuts_inner_widget)
-        self.shortcuts_layout.setSpacing(10)
-        self.shortcuts_layout.setContentsMargins(10, 10, 10, 10)
-        self.shortcuts_layout.setAlignment(Qt.AlignLeft)
+        self.shortcuts_layout = QGridLayout(self.shortcuts_inner_widget)
+        self.shortcuts_layout.setSpacing(8)
+        self.shortcuts_layout.setContentsMargins(8, 8, 8, 8)
         
         # Dictionnaire pour garder une référence aux boutons
         self.shortcut_buttons = {}
@@ -1372,7 +1491,7 @@ class POSPage(QWidget):
         return btn
 
     def load_shortcuts(self):
-        """Charger et afficher les raccourcis"""
+        """Charger et afficher les raccourcis en grille"""
         try:
             # Nettoyer le layout existant
             while self.shortcuts_layout.count():
@@ -1388,22 +1507,21 @@ class POSPage(QWidget):
             shortcuts_map = {s['position']: s for s in shortcuts}
             
             # Déterminer le nombre de slots à afficher
-            # Au moins 6, ou le max position + 1 si > 6 (pour laisser un slot vide à la fin)
             max_pos = max(shortcuts_map.keys()) if shortcuts_map else 0
             num_slots = max(6, max_pos + 1)
-            # Limite max raisonnable (ex: 20)
             num_slots = min(num_slots, 20)
             
-            # Créer les boutons
+            # Créer les boutons en grille (3 colonnes)
+            num_cols = 3
             for i in range(num_slots):
                 position = i + 1
                 data = shortcuts_map.get(position)
                 
                 btn = self.create_shortcut_btn(position, data)
-                self.shortcuts_layout.addWidget(btn)
+                row_idx = i // num_cols
+                col_idx = i % num_cols
+                self.shortcuts_layout.addWidget(btn, row_idx, col_idx)
                 self.shortcut_buttons[position] = btn
-                
-            self.shortcuts_layout.addStretch()
                 
         except Exception as e:
             logger.error(f"Erreur lors du chargement des raccourcis: {e}")
@@ -1614,7 +1732,7 @@ class POSPage(QWidget):
                 }
             """
             self.customer_combo.setStyleSheet(combo_style)
-            self.payment_method.setStyleSheet(combo_style)
+            # payment buttons keep their style in dark mode
             
             if hasattr(self, 'clear_customer_btn'):
                 self.clear_customer_btn.setStyleSheet("""
@@ -1692,7 +1810,7 @@ class POSPage(QWidget):
                 }
             """
             self.customer_combo.setStyleSheet(combo_style)
-            self.payment_method.setStyleSheet(combo_style)
+            # payment buttons keep their own style
             
             if hasattr(self, 'clear_customer_btn'):
                 self.clear_customer_btn.setStyleSheet("""
@@ -1708,6 +1826,113 @@ class POSPage(QWidget):
                         color: #e74c3c;
                     }
                 """)
+
+    def _set_payment_method(self, method):
+        """Définir la méthode de paiement via les boutons"""
+        self._current_payment_method = method
+        self.btn_pay_cash.setChecked(method == 'cash')
+        self.btn_pay_credit.setChecked(method == 'credit')
+
+    def add_new_customer_from_pos(self):
+        """Ajouter un nouveau client directement depuis la caisse"""
+        from PyQt5.QtWidgets import QDialog, QFormLayout, QDialogButtonBox
+        
+        dialog = QDialog(self)
+        dialog.setWindowTitle("➕ Nouveau Client")
+        dialog.setMinimumWidth(400)
+        dialog.setStyleSheet("background-color: white; font-size: 14px;")
+        
+        layout = QVBoxLayout(dialog)
+        
+        title = QLabel("👤 Ajouter un nouveau client")
+        title.setStyleSheet("font-size: 18px; font-weight: bold; color: #059669; margin-bottom: 10px;")
+        title.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title)
+        
+        form = QFormLayout()
+        form.setSpacing(12)
+        
+        input_style = """
+            QLineEdit {
+                padding: 10px; border: 2px solid #e5e7eb; border-radius: 8px;
+                font-size: 14px;
+            }
+            QLineEdit:focus { border-color: #10b981; }
+        """
+        
+        name_input = QLineEdit()
+        name_input.setPlaceholderText("Nom complet *")
+        name_input.setStyleSheet(input_style)
+        form.addRow("Nom:", name_input)
+        
+        phone_input = QLineEdit()
+        phone_input.setPlaceholderText("Téléphone")
+        phone_input.setStyleSheet(input_style)
+        form.addRow("Tél:", phone_input)
+        
+        credit_limit_input = QLineEdit()
+        credit_limit_input.setPlaceholderText("0.00")
+        credit_limit_input.setStyleSheet(input_style)
+        form.addRow("Limite crédit:", credit_limit_input)
+        
+        layout.addLayout(form)
+        
+        # Buttons
+        btn_layout = QHBoxLayout()
+        cancel_btn = QPushButton("Annuler")
+        cancel_btn.setStyleSheet("padding: 10px 20px; border-radius: 6px; font-size: 14px;")
+        cancel_btn.clicked.connect(dialog.reject)
+        
+        save_btn = QPushButton("✅ Enregistrer")
+        save_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #10b981; color: white; padding: 10px 20px;
+                border-radius: 6px; font-weight: bold; font-size: 14px;
+            }
+            QPushButton:hover { background-color: #059669; }
+        """)
+        
+        def save_customer():
+            name = name_input.text().strip()
+            if not name:
+                QMessageBox.warning(dialog, "Erreur", "Le nom est obligatoire.")
+                return
+            
+            phone = phone_input.text().strip() or None
+            try:
+                credit_limit = float(credit_limit_input.text().strip() or '0')
+            except ValueError:
+                credit_limit = 0.0
+            
+            success, msg, customer_id = customer_manager.create_customer(
+                full_name=name, phone=phone, credit_limit=credit_limit
+            )
+            
+            if success:
+                # Reload customers and select the new one
+                self.load_customers()
+                # Also update completer
+                customer_names = [self.customer_combo.itemText(i) for i in range(self.customer_combo.count())]
+                self.customer_completer_model.setStringList(customer_names)
+                
+                # Find and select the new customer
+                for i in range(self.customer_combo.count()):
+                    data = self.customer_combo.itemData(i)
+                    if isinstance(data, dict) and data.get('id') == customer_id:
+                        self.customer_combo.setCurrentIndex(i)
+                        break
+                
+                dialog.accept()
+                QMessageBox.information(self, "Succès", msg)
+            else:
+                QMessageBox.warning(dialog, "Erreur", msg)
+        
+        save_btn.clicked.connect(save_customer)
+        btn_layout.addWidget(cancel_btn)
+        btn_layout.addWidget(save_btn)
+        layout.addLayout(btn_layout)
+        
+        dialog.exec_()
 
     def load_customers(self):
         """Charger la liste des clients"""
@@ -1783,11 +2008,7 @@ class POSPage(QWidget):
                         self._delete_selected_item()
                         self.barcode_input.clear()
                 else:
-                    QMessageBox.warning(self, "❌ Produit n'existe pas", 
-                                      f"Le produit avec le code-barres\n"
-                                      f"'{barcode}'\n"
-                                      f"n'existe pas dans la liste des produits.\n\n"
-                                      f"Vérifiez le code-barres ou ajoutez le produit.")
+                    # Silently ignore unknown barcodes - do not show popup or modify anything
                     self.barcode_input.clear()
         except Exception as e:
             logger.error(f"Erreur scan produit: {e}")
@@ -2316,7 +2537,7 @@ class POSPage(QWidget):
             customer_data = self.customer_combo.currentData()
             customer_id = customer_data['id'] if isinstance(customer_data, dict) else customer_data
             
-            payment_method = self.payment_method.currentData()
+            payment_method = self._current_payment_method
             
             # Vérifier si crédit est sélectionné mais pas de client
             if payment_method == 'credit' and not customer_id:
@@ -2454,7 +2675,7 @@ class POSPage(QWidget):
                 # Réinitialiser champs
                 self.customer_combo.setCurrentIndex(-1)
                 self.customer_combo.lineEdit().clear()
-                self.payment_method.setCurrentIndex(0)
+                self._set_payment_method('cash')
                 
                 # Afficher l'aperçu du ticket SEULEMENT si checkbox cochée
                 if self.print_receipt_cb.isChecked():

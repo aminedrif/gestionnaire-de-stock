@@ -140,26 +140,11 @@ class ProductFormDialog(QDialog):
         self.packing_qty_spin.setValue(20)
         price_layout.addRow(_("label_packing_qty"), self.packing_qty_spin)
 
-        price_layout.addRow(QLabel(""))
-        price_layout.addRow(QLabel(f"<b>Liaison Manuelle</b>"))
-
-        # Parent Product Combo
-        self.parent_combo = QComboBox()
-        self.parent_combo.setEditable(True)
-        self.parent_combo.setInsertPolicy(QComboBox.NoInsert)
-        self.parent_combo.completer().setCompletionMode(QCompleter.PopupCompletion)
-        self.parent_combo.addItem("", None)
-        
-        all_products = product_manager.get_all_products()
-        for p in all_products:
-            # Ne pas s'ajouter soi-même comme parent, ni ajouter des enfants existants
-            if self.product and p['id'] == self.product['id']:
-                continue
-            if p.get('parent_product_id'):
-                continue
-            self.parent_combo.addItem(p['name'], p['id'])
-            
-        price_layout.addRow(_("label_parent_product"), self.parent_combo)
+        # Unit barcode field (for auto-created unit)
+        self.unit_barcode_edit = QLineEdit()
+        self.unit_barcode_edit.setPlaceholderText(_("placeholder_unit_barcode", "Code-barres de l'unité"))
+        self.unit_barcode_edit.setEnabled(False)
+        price_layout.addRow(_("label_unit_barcode", "Code-barres unité"), self.unit_barcode_edit)
         
         layout.addWidget(tabs)
         
@@ -214,21 +199,16 @@ class ProductFormDialog(QDialog):
             packing_qty = self.product.get('packing_quantity', 20)
             self.packing_qty_spin.setValue(packing_qty if packing_qty else 20)
             
-            # Select Parent Product
-            parent_id = self.product.get('parent_product_id')
-            if parent_id:
-                index = self.parent_combo.findData(parent_id)
-                if index >= 0:
-                    self.parent_combo.setCurrentIndex(index)
-            
             # Hide auto-create for existing products (edit mode)
             self.auto_create_unit_check.setVisible(False)
             self.unit_price_spin.setVisible(False)
+            self.unit_barcode_edit.setVisible(False)
 
     
     def _toggle_unit_fields(self, checked):
         """Toggle unit price field visibility"""
         self.unit_price_spin.setEnabled(checked)
+        self.unit_barcode_edit.setEnabled(checked)
                 
     def save(self):
         _ = i18n_manager.get
@@ -249,7 +229,6 @@ class ProductFormDialog(QDialog):
             'supplier_id': self.supplier_combo.currentData(),
             'category_id': self.category_combo.currentData(),
             'is_tobacco': 0, # Removed feature
-            'parent_product_id': self.parent_combo.currentData(),
             'packing_quantity': self.packing_qty_spin.value()
         }
 
@@ -262,8 +241,14 @@ class ProductFormDialog(QDialog):
             # Auto-create Unit product if checkbox is checked
             if success and self.auto_create_unit_check.isChecked() and self.unit_price_spin.value() > 0:
                 unit_name = f"{self.name_edit.text()}{_('unit_suffix_fr')}"
-                # Use the product's own barcode if it has one; only auto-generate if empty
-                unit_barcode = self.barcode_edit.text() + "-U" if self.barcode_edit.text() and not product_manager.get_product_by_barcode(self.barcode_edit.text() + "-U") else None
+                # Use user-entered barcode, or auto-generate if empty
+                user_barcode = self.unit_barcode_edit.text().strip()
+                if user_barcode:
+                    unit_barcode = user_barcode
+                elif self.barcode_edit.text():
+                    unit_barcode = self.barcode_edit.text() + "-U" if not product_manager.get_product_by_barcode(self.barcode_edit.text() + "-U") else None
+                else:
+                    unit_barcode = None
                 
                 name_ar = self.name_ar_edit.text()
                 unit_name_ar = f"{name_ar}{_('unit_suffix_ar')}" if name_ar else None
@@ -677,7 +662,7 @@ class ProductsPage(QWidget):
             px_h = int(LABEL_H_MM / 25.4 * PREVIEW_DPI)
             
             def render_barcode_image():
-                """Render barcode label to QImage"""
+                """Render barcode label to QImage using python-barcode for thermal printer compatibility"""
                 img = QImage(px_w, px_h, QImage.Format_RGB32)
                 img.fill(Qt.white)
                 
@@ -695,28 +680,68 @@ class ProductsPage(QWidget):
                 name_rect = QRectF(0.5 * ppmm, 0.5 * ppmm, (LABEL_W_MM - 1) * ppmm, 4 * ppmm)
                 painter.drawText(name_rect, Qt.AlignCenter | Qt.TextWordWrap, name_display)
                 
-                # Draw barcode using simple Code128-like bars representation
-                # Generate Code128 barcode pattern
-                bars = _generate_code128_bars(barcode_value)
-                if bars:
+                # Try python-barcode library first (for thermal printer compatibility)
+                barcode_rendered = False
+                try:
+                    import barcode
+                    from barcode.writer import ImageWriter
+                    import io
+                    from PIL import Image as PILImage
+                    
+                    # Generate Code128 barcode with python-barcode
+                    code128 = barcode.get('code128', barcode_value, writer=ImageWriter())
+                    buffer = io.BytesIO()
+                    code128.write(buffer, options={
+                        'module_width': 0.2,
+                        'module_height': 8.0,
+                        'font_size': 0,  # No text (we draw our own)
+                        'text_distance': 0,
+                        'quiet_zone': 1.0,
+                        'write_text': False,
+                    })
+                    buffer.seek(0)
+                    
+                    # Convert PIL image to QImage
+                    pil_img = PILImage.open(buffer).convert('RGB')
+                    pil_data = pil_img.tobytes('raw', 'RGB')
+                    bc_qimg = QImage(pil_data, pil_img.width, pil_img.height, pil_img.width * 3, QImage.Format_RGB888)
+                    
+                    # Draw barcode in the designated area
                     bar_area_x = 1.0 * ppmm
                     bar_area_y = 5.0 * ppmm
                     bar_area_w = (LABEL_W_MM - 2.0) * ppmm
                     bar_area_h = 9 * ppmm
                     
-                    total_bars = len(bars)
-                    bar_width = bar_area_w / total_bars if total_bars > 0 else 1
-                    
-                    painter.setPen(Qt.NoPen)
-                    for i, bar in enumerate(bars):
-                        if bar == '1':
-                            painter.setBrush(Qt.black)
-                            painter.drawRect(QRectF(
-                                bar_area_x + i * bar_width,
-                                bar_area_y,
-                                bar_width + 0.5,  # Slight overlap to avoid gaps
-                                bar_area_h
-                            ))
+                    target_rect = QRectF(bar_area_x, bar_area_y, bar_area_w, bar_area_h)
+                    painter.drawImage(target_rect, bc_qimg)
+                    barcode_rendered = True
+                except ImportError:
+                    pass  # Fall back to custom rendering
+                except Exception as e:
+                    logger.warning(f"python-barcode failed, using fallback: {e}")
+                
+                # Fallback: custom Code128 bar pattern
+                if not barcode_rendered:
+                    bars = _generate_code128_bars(barcode_value)
+                    if bars:
+                        bar_area_x = 1.0 * ppmm
+                        bar_area_y = 5.0 * ppmm
+                        bar_area_w = (LABEL_W_MM - 2.0) * ppmm
+                        bar_area_h = 9 * ppmm
+                        
+                        total_bars = len(bars)
+                        bar_width = bar_area_w / total_bars if total_bars > 0 else 1
+                        
+                        painter.setPen(Qt.NoPen)
+                        for i, bar in enumerate(bars):
+                            if bar == '1':
+                                painter.setBrush(Qt.black)
+                                painter.drawRect(QRectF(
+                                    bar_area_x + i * bar_width,
+                                    bar_area_y,
+                                    bar_width + 0.5,
+                                    bar_area_h
+                                ))
                 
                 # Draw barcode text below bars
                 font_code = QFont("Consolas", max(1, int(2.5 * ppmm / 4)))

@@ -116,23 +116,30 @@ class PaymentDialog(QDialog):
         layout.addWidget(info)
         
         form = QFormLayout()
-        self.amount_spin = QDoubleSpinBox()
-        self.amount_spin.setRange(0, self.customer['current_credit'])
-        self.amount_spin.setSuffix(" DA")
-        self.amount_spin.setValue(min(1000, self.customer['current_credit']))
-        self.amount_spin.valueChanged.connect(self.update_remaining)
+        self.amount_input = QLineEdit()
+        self.amount_input.setPlaceholderText("Montant à payer")
+        self.amount_input.setStyleSheet("""
+            QLineEdit {
+                padding: 10px; border: 2px solid #e5e7eb; border-radius: 8px;
+                font-size: 16px; font-weight: bold;
+            }
+            QLineEdit:focus { border-color: #10b981; }
+        """)
+        default_val = min(1000, self.customer['current_credit']) if self.customer['current_credit'] > 0 else ''
+        self.amount_input.setText(str(default_val) if default_val else '')
+        self.amount_input.textChanged.connect(self.update_remaining)
         
         self.notes_edit = QLineEdit()
         self.notes_edit.setPlaceholderText(_("placeholder_note"))
         
-        form.addRow(_("label_amount_pay"), self.amount_spin)
+        form.addRow(_("label_amount_pay"), self.amount_input)
         form.addRow(_("label_note"), self.notes_edit)
         layout.addLayout(form)
         
         # Nouveau solde
-        remaining = self.customer['current_credit'] - self.amount_spin.value()
-        self.remaining_label = QLabel(_("label_new_balance").format(remaining))
+        self.remaining_label = QLabel()
         self.remaining_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #2c3e50;")
+        self.update_remaining()
         layout.addWidget(self.remaining_label)
         
         # Checkbox imprimer reçu
@@ -151,7 +158,11 @@ class PaymentDialog(QDialog):
     def update_remaining(self):
         """Mettre à jour le solde restant"""
         _ = i18n_manager.get
-        remaining = self.customer['current_credit'] - self.amount_spin.value()
+        try:
+            amount = float(self.amount_input.text().strip() or '0')
+        except ValueError:
+            amount = 0
+        remaining = self.customer['current_credit'] - amount
         self.remaining_label.setText(_("label_new_balance").format(remaining))
         if remaining < 0:
              self.remaining_label.setStyleSheet("font-size: 14px; font-weight: bold; color: green;")
@@ -159,8 +170,13 @@ class PaymentDialog(QDialog):
              self.remaining_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #2c3e50;")
         
     def save(self):
-        amount = self.amount_spin.value()
+        try:
+            amount = float(self.amount_input.text().strip() or '0')
+        except ValueError:
+            QMessageBox.warning(self, "Erreur", "Montant invalide.")
+            return
         if amount <= 0:
+            QMessageBox.warning(self, "Erreur", "Le montant doit être supérieur à 0.")
             return
             
         user = auth_manager.get_current_user()
@@ -404,6 +420,61 @@ class CustomersPage(QWidget):
         header_layout.addStretch()
         layout.addWidget(header_frame)
         
+        # Stats Cards Row
+        stats_layout = QHBoxLayout()
+        stats_layout.setSpacing(12)
+        
+        def make_stat_card(icon, label_text, value_text, color, bg_color):
+            card = QFrame()
+            card.setStyleSheet(f"""
+                QFrame {{
+                    background-color: {bg_color};
+                    border-radius: 12px;
+                    border: 1px solid {color}30;
+                    padding: 12px;
+                }}
+            """)
+            card_layout = QVBoxLayout(card)
+            card_layout.setSpacing(4)
+            card_layout.setContentsMargins(15, 12, 15, 12)
+            
+            icon_lbl = QLabel(icon)
+            icon_lbl.setStyleSheet(f"font-size: 22px; background: transparent;")
+            card_layout.addWidget(icon_lbl)
+            
+            val_lbl = QLabel(value_text)
+            val_lbl.setStyleSheet(f"font-size: 20px; font-weight: bold; color: {color}; background: transparent;")
+            val_lbl.setObjectName("stat_value")
+            card_layout.addWidget(val_lbl)
+            
+            txt_lbl = QLabel(label_text)
+            txt_lbl.setStyleSheet(f"font-size: 12px; color: #6b7280; background: transparent;")
+            card_layout.addWidget(txt_lbl)
+            
+            return card
+        
+        # Get stats data
+        try:
+            all_customers = customer_manager.get_all_customers()
+            total_clients = len(all_customers)
+            clients_with_debt = sum(1 for c in all_customers if float(c.get('current_credit', 0) or 0) > 0)
+            total_debt = sum(float(c.get('current_credit', 0) or 0) for c in all_customers)
+        except Exception:
+            total_clients = 0
+            clients_with_debt = 0
+            total_debt = 0
+        
+        self.stat_card_total = make_stat_card("👥", _("stat_total_clients", "Total Clients"), str(total_clients), "#3b82f6", "#eff6ff")
+        stats_layout.addWidget(self.stat_card_total)
+        
+        self.stat_card_debt = make_stat_card("⚠️", _("stat_with_debt", "Avec Crédit"), str(clients_with_debt), "#f59e0b", "#fffbeb")
+        stats_layout.addWidget(self.stat_card_debt)
+        
+        self.stat_card_amount = make_stat_card("💰", _("stat_total_debt", "Crédit Total"), f"{total_debt:,.0f} DA", "#ef4444", "#fef2f2")
+        stats_layout.addWidget(self.stat_card_amount)
+        
+        layout.addLayout(stats_layout)
+        
         # Toolbar - Améliorée
         toolbar = QHBoxLayout()
         toolbar.setSpacing(10)
@@ -569,15 +640,15 @@ class CustomersPage(QWidget):
             def make_btn(text, tooltip, color, hover_bg):
                 btn = QPushButton(text)
                 btn.setToolTip(tooltip)
-                btn.setFixedSize(35, 35)
+                btn.setFixedSize(40, 40)
                 btn.setCursor(Qt.PointingHandCursor)
                 btn.setStyleSheet(f"""
                     QPushButton {{
                         background-color: transparent;
-                        border: 1px solid #e5e7eb;
-                        border-radius: 6px;
+                        border: 2px solid #e5e7eb;
+                        border-radius: 8px;
                         color: {color};
-                        font-size: 16px;
+                        font-size: 18px;
                     }}
                     QPushButton:hover {{
                         background-color: {hover_bg};

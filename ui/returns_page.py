@@ -194,6 +194,45 @@ class ReturnsPage(QWidget):
         
         layout.addLayout(toolbar)
 
+        # Recent Sales Table (no need to go to history for sale IDs)
+        recent_label = QLabel("📋 " + _('recent_sales_label', 'Ventes récentes (double-cliquez pour sélectionner)'))
+        recent_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #10b981; margin-top: 5px;")
+        layout.addWidget(recent_label)
+        
+        self.recent_sales_table = QTableWidget()
+        self.recent_sales_table.setColumnCount(5)
+        self.recent_sales_table.setHorizontalHeaderLabels(
+            ["ID", _("col_ticket", "N° Ticket"), _("col_date", "Date"), _("col_total", "Total"), _("col_client", "Client")]
+        )
+        self.recent_sales_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.recent_sales_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.recent_sales_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.recent_sales_table.setMaximumHeight(200)
+        self.recent_sales_table.setStyleSheet("""
+            QTableWidget {
+                font-size: 13px;
+                border: 1px solid #e5e7eb;
+                border-radius: 8px;
+                background-color: #ffffff;
+            }
+            QHeaderView::section {
+                background-color: #f0fdf4;
+                padding: 8px;
+                font-weight: bold;
+                color: #15803d;
+                border: none;
+                border-bottom: 2px solid #bbf7d0;
+            }
+            QTableWidget::item:selected {
+                background-color: #d1fae5;
+            }
+        """)
+        self.recent_sales_table.doubleClicked.connect(self._on_recent_sale_clicked)
+        layout.addWidget(self.recent_sales_table)
+        
+        # Load recent sales
+        self._load_recent_sales()
+
         # Info vente et Actions
         self.info_frame = QFrame()
         self.info_frame.setVisible(False)
@@ -340,6 +379,44 @@ class ReturnsPage(QWidget):
         elif index == 0:
             if hasattr(self, 'search_input'):
                 self.search_input.setFocus()
+            self._load_recent_sales()
+    
+    def _load_recent_sales(self):
+        """Load recent completed sales into the table"""
+        try:
+            query = """
+                SELECT s.id, s.sale_number, s.sale_date, s.total_amount, 
+                       COALESCE(c.full_name, 'Anonyme') as customer_name
+                FROM sales s
+                LEFT JOIN customers c ON s.customer_id = c.id
+                WHERE s.status = 'completed'
+                ORDER BY s.sale_date DESC
+                LIMIT 20
+            """
+            sales = db.execute_query(query)
+            if not hasattr(self, 'recent_sales_table'):
+                return
+            self.recent_sales_table.setRowCount(0)
+            for sale in sales:
+                row = self.recent_sales_table.rowCount()
+                self.recent_sales_table.insertRow(row)
+                id_item = QTableWidgetItem(str(sale['id']))
+                id_item.setData(Qt.UserRole, sale['id'])
+                self.recent_sales_table.setItem(row, 0, id_item)
+                self.recent_sales_table.setItem(row, 1, QTableWidgetItem(sale['sale_number']))
+                self.recent_sales_table.setItem(row, 2, QTableWidgetItem(str(sale['sale_date'])))
+                self.recent_sales_table.setItem(row, 3, QTableWidgetItem(f"{sale['total_amount']:.2f} DA"))
+                self.recent_sales_table.setItem(row, 4, QTableWidgetItem(sale['customer_name']))
+        except Exception as e:
+            logger.error(f"Erreur chargement ventes récentes: {e}")
+    
+    def _on_recent_sale_clicked(self):
+        """Handle double-click on a recent sale row"""
+        row = self.recent_sales_table.currentRow()
+        if row >= 0:
+            sale_id = self.recent_sales_table.item(row, 0).data(Qt.UserRole)
+            self.search_input.setText(str(sale_id))
+            self.search_sale()
 
     def load_history_data(self):
         try:
