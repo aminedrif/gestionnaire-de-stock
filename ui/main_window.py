@@ -21,7 +21,6 @@ from ui.reports_page import ReportsPage
 from ui.settings_page import SettingsPage
 from ui.returns_page import ReturnsPage
 from ui.sales_history_page import SalesHistoryPage
-from ui.categories_page import CategoriesPage
 from ui.shortcuts_mgmt_page import ShortcutsManagementPage
 
 import config
@@ -194,9 +193,6 @@ class MainWindow(QMainWindow):
             menu_layout.addWidget(btn_products)
             self.menu_buttons['products'] = btn_products
 
-            btn_categories = self.create_menu_button(_('menu_categories'), "categories")
-            menu_layout.addWidget(btn_categories)
-            self.menu_buttons['categories'] = btn_categories
 
         # Shortcuts Mgmt (Moved under Products as requested)
         if auth_manager.has_permission('manage_shortcuts'):
@@ -392,9 +388,6 @@ class MainWindow(QMainWindow):
             self.content_area.addWidget(products_page)
             self.page_map['products'] = products_page
 
-            categories_page = CategoriesPage()
-            self.content_area.addWidget(categories_page)
-            self.page_map['categories'] = categories_page
         
         # Clients
         if auth_manager.has_permission('view_customers'):

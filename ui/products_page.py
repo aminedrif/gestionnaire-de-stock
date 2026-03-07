@@ -11,7 +11,6 @@ from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
 from PyQt5.QtCore import Qt, QDate
 from PyQt5.QtGui import QColor, QBrush
 from modules.products.product_manager import product_manager
-from modules.products.category_manager import category_manager
 from modules.suppliers.supplier_manager import supplier_manager
 from modules.reports.reorder_report import generate_reorder_report
 from core.logger import logger
@@ -28,7 +27,6 @@ class ProductFormDialog(QDialog):
         self.setWindowTitle(_("product_dialog_new") if not product else _("product_dialog_edit"))
         self.setMinimumWidth(500)
         self.suppliers = supplier_manager.get_all_suppliers()
-        self.categories = category_manager.get_all_categories()
         self.setup_ui()
         
     def setup_ui(self):
@@ -45,19 +43,7 @@ class ProductFormDialog(QDialog):
         self.barcode_edit = QLineEdit()
         self.name_edit = QLineEdit()
         self.name_ar_edit = QLineEdit()
-        self.category_combo = QComboBox()
-        self.category_combo.setEditable(True)
-        self.category_combo.setInsertPolicy(QComboBox.NoInsert)
-        self.category_combo.completer().setCompletionMode(QCompleter.PopupCompletion)
         
-        # Fill Categories
-        self.category_combo.addItem("", None)
-        is_arabic = i18n_manager.current_language == 'ar'
-        for c in self.categories:
-            # Display Arabic name if in Arabic mode and available, else French name
-            display_name = c['name_ar'] if is_arabic and c.get('name_ar') else c['name']
-            self.category_combo.addItem(display_name, c['id'])
-            
         self.supplier_combo = QComboBox()
         self.supplier_combo.setEditable(True)
         self.supplier_combo.setInsertPolicy(QComboBox.NoInsert)
@@ -71,10 +57,8 @@ class ProductFormDialog(QDialog):
         form_layout.addRow(_("label_barcode"), self.barcode_edit)
         form_layout.addRow(_("label_fullname"), self.name_edit)
         form_layout.addRow(_("label_name_ar"), self.name_ar_edit)
-        form_layout.addRow(_("label_category"), self.category_combo)
         form_layout.addRow(_("label_supplier"), self.supplier_combo)
         form_layout.addRow(_("label_description"), self.description_edit)
-        # form_layout.addRow("Catégorie:", self.category_combo)
         
         general_tab.setLayout(form_layout)
         tabs.addTab(general_tab, _("tab_general"))
@@ -183,12 +167,6 @@ class ProductFormDialog(QDialog):
                 if index >= 0:
                     self.supplier_combo.setCurrentIndex(index)
 
-            # Select Category
-            category_id = self.product.get('category_id')
-            if category_id:
-                index = self.category_combo.findData(category_id)
-                if index >= 0:
-                    self.category_combo.setCurrentIndex(index)
             
             if self.product.get('expiry_date'):
                 self.enable_expiry.setChecked(True)
@@ -227,7 +205,6 @@ class ProductFormDialog(QDialog):
             'min_stock_level': self.min_stock_spin.value(),
             'expiry_date': self.expiry_date_edit.date().toString("yyyy-MM-dd") if self.enable_expiry.isChecked() else None,
             'supplier_id': self.supplier_combo.currentData(),
-            'category_id': self.category_combo.currentData(),
             'is_tobacco': 0, # Removed feature
             'packing_quantity': self.packing_qty_spin.value()
         }
@@ -263,7 +240,6 @@ class ProductFormDialog(QDialog):
                     'stock_quantity': 0,  # Start with 0, will be filled when pack is opened
                     'min_stock_level': 0,
                     'supplier_id': self.supplier_combo.currentData(),
-                    'category_id': self.category_combo.currentData(),
                     'is_tobacco': 0,
                     'parent_product_id': pack_id,  # Link to the pack we just created
                     'packing_quantity': self.packing_qty_spin.value()

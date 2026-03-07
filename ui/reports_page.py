@@ -310,17 +310,7 @@ class ReportsPage(QWidget):
         self.user_sales_table.setStyleSheet(table_style)
         tabs.addTab(self.user_sales_table, _('tab_user_sales'))
         
-        # Onglet 4: Categories
-        self.category_table = QTableWidget()
-        self.category_table.setColumnCount(5)
-        self.category_table.setHorizontalHeaderLabels(_('table_headers_categories_report'))
-        self.category_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.category_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.category_table.setAlternatingRowColors(True)
-        self.category_table.verticalHeader().setDefaultSectionSize(55)
-        self.category_table.setStyleSheet(table_style)
-        tabs.addTab(self.category_table, _('tab_categories'))
-        
+
         # Onglet 5: Clôture
         self.closure_widget = QWidget()
         closure_layout = QVBoxLayout(self.closure_widget)
@@ -404,31 +394,7 @@ class ReportsPage(QWidget):
             except Exception as e:
                 logger.warning(f"Erreur affichage jour: {e}")
 
-        # 3. Category Performance
-        cat_stats = profit_report_manager.get_category_performance_report(start, end)
-        self.category_table.setRowCount(0)
-        for cat in cat_stats:
-            try:
-                # Convert to dict for safe access
-                cat_dict = dict(cat) if hasattr(cat, 'keys') else cat
-                row = self.category_table.rowCount()
-                self.category_table.insertRow(row)
-                self.category_table.setItem(row, 0, QTableWidgetItem(str(cat_dict.get('name', 'N/A'))))
-                self.category_table.setItem(row, 1, QTableWidgetItem(f"{cat_dict.get('revenue', 0):.2f}"))
-                
-                profit_val = cat_dict.get('profit', 0)
-                profit_item = QTableWidgetItem(f"{profit_val:.2f}")
-                if profit_val > 0:
-                    profit_item.setForeground(QColor("green"))
-                else:
-                    profit_item.setForeground(QColor("red"))
-                self.category_table.setItem(row, 2, profit_item)
-                
-                self.category_table.setItem(row, 3, QTableWidgetItem(str(cat_dict.get('top_product', 'N/A'))))
-                self.category_table.setItem(row, 4, QTableWidgetItem(str(cat_dict.get('top_product_qty', 0))))
-            except Exception as e:
-                logger.warning(f"Erreur affichage catégorie: {e}")
-            
+
         # 4. Top Products
         products = profit_report_manager.get_profit_by_product(start, end)
         self.product_table.setRowCount(0)

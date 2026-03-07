@@ -792,29 +792,13 @@ class POSPage(QWidget):
         
         layout.addWidget(header_frame)
         
-        # Scanner code-barres
-        self.scanner_group = QGroupBox(_("group_scan"))
-        self.scanner_group.setStyleSheet("""
-            QGroupBox {
-                font-size: 12px;
-                font-weight: bold;
-                border: 2px solid #e5e7eb;
-                border-radius: 8px;
-                margin-top: 5px;
-                padding: 10px 10px 10px 10px;
-                background-color: #fafafa;
-            }
-            QGroupBox::title {
-                color: #8b5cf6;
-                subcontrol-position: top left;
-                padding: 3px 8px;
-            }
-        """)
-        scanner_layout = QVBoxLayout()
+        # Scanner + Recherche Produit (même ligne, sans titre)
+        scan_row = QHBoxLayout()
+        scan_row.setSpacing(8)
         
         self.barcode_input = QLineEdit()
         self.barcode_input.setPlaceholderText(_("placeholder_scan"))
-        self.barcode_input.setMinimumHeight(40)
+        self.barcode_input.setMinimumHeight(45)
         self.barcode_input.setStyleSheet("""
             QLineEdit {
                 padding: 8px 12px;
@@ -838,11 +822,9 @@ class POSPage(QWidget):
         self.scan_timer.setSingleShot(True)
         self.scan_timer.timeout.connect(self.auto_scan_product)
         self.barcode_input.textChanged.connect(self.on_barcode_text_changed)
-        scanner_layout.addWidget(self.barcode_input)
-        self.scanner_group.setLayout(scanner_layout)
-        layout.addWidget(self.scanner_group)
+        scan_row.addWidget(self.barcode_input, 1)
         
-        # Bouton Recherche Produit (Compressed)
+        # Bouton Recherche Produit
         self.popup_search_btn = QPushButton("🔍 Recherche Produit")
         self.popup_search_btn.setMinimumHeight(45)
         self.popup_search_btn.setStyleSheet("""
@@ -853,14 +835,18 @@ class POSPage(QWidget):
                 font-weight: bold;
                 border: none;
                 border-radius: 8px;
-                margin-top: 5px;
+                padding: 0 15px;
             }
             QPushButton:hover {
                 background-color: #2980b9;
             }
         """)
         self.popup_search_btn.clicked.connect(self.open_search_dialog)
-        layout.addWidget(self.popup_search_btn)
+        scan_row.addWidget(self.popup_search_btn)
+        
+        layout.addLayout(scan_row)
+        # Keep scanner_group reference for update_ui_text compatibility
+        self.scanner_group = type('obj', (object,), {'setTitle': lambda self, t: None})()
 
 
         
@@ -974,142 +960,19 @@ class POSPage(QWidget):
         """)
         
         layout = QVBoxLayout()
-        layout.setSpacing(15)
+        layout.setSpacing(10)
         
         _ = i18n_manager.get
         
-        # Client - Dropdown Search
-        customer_layout = QHBoxLayout()
-        
-        # Simplified customer search combo
-        self.customer_combo = QComboBox()
-        self.customer_combo.setMinimumHeight(45)
-        self.customer_combo.setEditable(True)
-        self.customer_combo.setInsertPolicy(QComboBox.NoInsert)
-        
-        # Style
-        self.customer_combo.lineEdit().setPlaceholderText("Client de passage / Anonyme")
-        self.customer_combo.setStyleSheet("""
-            QComboBox {
-                background-color: white;
-                border: 2px solid #e0e0e0;
-                border-radius: 8px;
-                padding: 5px 10px;
-                font-size: 16px;
-            }
-            QComboBox:focus {
-                border-color: #3498db;
-            }
-        """)
-        
-        # Populate first (before setting up completer)
-        self.load_customers()
-        
-        # Create a custom completer with string list model for reliable "contains" search
-        customer_names = [self.customer_combo.itemText(i) for i in range(self.customer_combo.count())]
-        self.customer_completer_model = QStringListModel(customer_names)
-        
-        self.customer_completer = QCompleter(self.customer_completer_model, self)
-        self.customer_completer.setCompletionMode(QCompleter.PopupCompletion)
-        self.customer_completer.setFilterMode(Qt.MatchContains)
-        self.customer_completer.setCaseSensitivity(Qt.CaseInsensitive)
-        
-        # Connect completer activation to set the combo box index
-        def on_completer_activated(text):
-            for i in range(self.customer_combo.count()):
-                if self.customer_combo.itemText(i) == text:
-                    self.customer_combo.setCurrentIndex(i)
-                    break
-        
-        self.customer_completer.activated.connect(on_completer_activated)
-        self.customer_combo.setCompleter(self.customer_completer)
-        
-        self.customer_combo.setCompleter(self.customer_completer)
-        
-        # Install event filter for select-all behavior
-        self.customer_combo.lineEdit().installEventFilter(self)
-        
-        self.customer_combo.currentIndexChanged.connect(self.on_customer_selected)
-
-        # Handle text clearing to reset to Anonymous
-        def on_text_changed(text):
-            if not text.strip():
-                self.customer_combo.setCurrentIndex(0) # Reset to Anonyme
-                
-        self.customer_combo.lineEdit().textChanged.connect(on_text_changed)
-        
-        customer_layout.addWidget(self.customer_combo, 1) 
-        
-        # Bouton Recherche Avancée (Nouveau)
-        self.search_customer_btn = QPushButton("🔍")
-        self.search_customer_btn.setFixedSize(45, 45)
-        self.search_customer_btn.setToolTip(_("btn_search"))
-        self.search_customer_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #e0f7fa;
-                border: 2px solid #b2ebf2;
-                border-radius: 8px;
-                font-weight: bold;
-                color: #0097a7;
-            }
-            QPushButton:hover {
-                background-color: #b2ebf2;
-            }
-        """)
-        self.search_customer_btn.clicked.connect(self.open_customer_search)
-        customer_layout.addWidget(self.search_customer_btn) 
-        
-        # Bouton Vider sélection
-        self.clear_customer_btn = QPushButton("❌")
-        self.clear_customer_btn.setFixedSize(45, 45)
-        self.clear_customer_btn.setToolTip("Réinitialiser (Aucun client)")
-        self.clear_customer_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #ffebee;
-                border: 2px solid #ffcdd2;
-                border-radius: 8px;
-                font-weight: bold;
-                color: #c62828;
-            }
-            QPushButton:hover {
-                background-color: #ffcdd2;
-            }
-        """)
-        self.clear_customer_btn.clicked.connect(self.clear_customer_selection)
-        customer_layout.addWidget(self.clear_customer_btn)
-        
-        # Bouton Nouveau Client (ajout direct depuis caisse)
-        self.add_customer_btn = QPushButton("➕")
-        self.add_customer_btn.setFixedSize(45, 45)
-        self.add_customer_btn.setToolTip("Ajouter un nouveau client")
-        self.add_customer_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #ecfdf5;
-                border: 2px solid #a7f3d0;
-                border-radius: 8px;
-                font-weight: bold;
-                font-size: 18px;
-                color: #059669;
-            }
-            QPushButton:hover {
-                background-color: #a7f3d0;
-            }
-        """)
-        self.add_customer_btn.clicked.connect(self.add_new_customer_from_pos)
-        customer_layout.addWidget(self.add_customer_btn)
-        
-        layout.addLayout(customer_layout)
-        
-        # Panier
+        # ===== 1. PANIER (en haut pour plus d'espace) =====
         self.cart_label = QLabel(_("label_cart"))
-        self.cart_label.setStyleSheet("font-size: 18px; font-weight: bold; color: #8b5cf6; margin-top: 10px;")
+        self.cart_label.setStyleSheet("font-size: 18px; font-weight: bold; color: #8b5cf6;")
         layout.addWidget(self.cart_label)
         
         self.cart_table = QTableWidget()
         self.cart_table.setColumnCount(5)
         self.cart_table.setHorizontalHeaderLabels(_("table_headers_cart"))
         self.cart_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
-        # self.cart_table.setEditTriggers(QAbstractItemView.NoEditTriggers) # Removed to allow editing
         self.cart_table.setStyleSheet("""
             QTableWidget {
                 border: 2px solid #e5e7eb;
@@ -1141,27 +1004,21 @@ class POSPage(QWidget):
             }
         """)
         self.cart_table.setAlternatingRowColors(True)
-        # Enable row selection and keyboard navigation
         self.cart_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.cart_table.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.cart_table.installEventFilter(self)  # For Delete key handling
-        # Connecter le signal de changement de cellule pour l'édition de quantité
+        self.cart_table.installEventFilter(self)
         self.cart_table.cellChanged.connect(self.on_cart_cell_changed)
-        layout.addWidget(self.cart_table)
+        layout.addWidget(self.cart_table, 1)  # stretch=1 so cart takes available space
         
-        # Raccourcis POS (Shortcuts Grid)
+        # ===== 2. RACCOURCIS POS =====
         shortcuts_label = QLabel("⚡ Raccourcis")
-        shortcuts_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #8b5cf6; margin-top: 10px;")
+        shortcuts_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #8b5cf6; margin-top: 5px;")
         layout.addWidget(shortcuts_label)
         
         self.shortcuts_container = self.create_shortcuts_grid()
         layout.addWidget(self.shortcuts_container)
         
-        # Totaux
-        # Totaux supprimés du panneau droit pour laisser plus de place au panier
-        # (Déplacés vers le header gauche)
-        
-        # Paiement - Boutons au lieu de ComboBox
+        # ===== 3. PAIEMENT =====
         self.payment_group = QGroupBox(_("group_payment"))
         self.payment_group.setStyleSheet("""
             QGroupBox {
@@ -1175,34 +1032,21 @@ class POSPage(QWidget):
         """)
         payment_layout = QVBoxLayout()
         
-        # Payment method buttons
         payment_btn_layout = QHBoxLayout()
         payment_btn_layout.setSpacing(8)
         
         self.btn_pay_cash = QPushButton("💵 " + _("payment_cash"))
         self.btn_pay_cash.setMinimumHeight(50)
         self.btn_pay_cash.setCheckable(True)
-        self.btn_pay_cash.setChecked(True)  # Default to cash
+        self.btn_pay_cash.setChecked(True)
         self.btn_pay_cash.setStyleSheet("""
             QPushButton {
-                background-color: #f0fdf4;
-                border: 2px solid #86efac;
-                border-radius: 10px;
-                font-size: 15px;
-                font-weight: bold;
-                color: #166534;
+                background-color: #f0fdf4; border: 2px solid #86efac; border-radius: 10px;
+                font-size: 15px; font-weight: bold; color: #166534;
             }
-            QPushButton:checked {
-                background-color: #22c55e;
-                color: white;
-                border-color: #16a34a;
-            }
-            QPushButton:hover {
-                background-color: #bbf7d0;
-            }
-            QPushButton:checked:hover {
-                background-color: #16a34a;
-            }
+            QPushButton:checked { background-color: #22c55e; color: white; border-color: #16a34a; }
+            QPushButton:hover { background-color: #bbf7d0; }
+            QPushButton:checked:hover { background-color: #16a34a; }
         """)
         self.btn_pay_cash.clicked.connect(lambda: self._set_payment_method('cash'))
         payment_btn_layout.addWidget(self.btn_pay_cash)
@@ -1212,24 +1056,12 @@ class POSPage(QWidget):
         self.btn_pay_credit.setCheckable(True)
         self.btn_pay_credit.setStyleSheet("""
             QPushButton {
-                background-color: #fef3c7;
-                border: 2px solid #fcd34d;
-                border-radius: 10px;
-                font-size: 15px;
-                font-weight: bold;
-                color: #92400e;
+                background-color: #fef3c7; border: 2px solid #fcd34d; border-radius: 10px;
+                font-size: 15px; font-weight: bold; color: #92400e;
             }
-            QPushButton:checked {
-                background-color: #f59e0b;
-                color: white;
-                border-color: #d97706;
-            }
-            QPushButton:hover {
-                background-color: #fde68a;
-            }
-            QPushButton:checked:hover {
-                background-color: #d97706;
-            }
+            QPushButton:checked { background-color: #f59e0b; color: white; border-color: #d97706; }
+            QPushButton:hover { background-color: #fde68a; }
+            QPushButton:checked:hover { background-color: #d97706; }
         """)
         self.btn_pay_credit.clicked.connect(lambda: self._set_payment_method('credit'))
         payment_btn_layout.addWidget(self.btn_pay_credit)
@@ -1238,7 +1070,6 @@ class POSPage(QWidget):
         
         payment_layout.addLayout(payment_btn_layout)
         
-        # Checkbox pour imprimer le ticket
         self.print_receipt_cb = QCheckBox(_("checkbox_print_ticket"))
         self.print_receipt_cb.setChecked(True)
         self.print_receipt_cb.setStyleSheet("font-size: 14px; padding: 5px;")
@@ -1247,137 +1078,149 @@ class POSPage(QWidget):
         self.payment_group.setLayout(payment_layout)
         layout.addWidget(self.payment_group)
         
-        # Boutons d'action - Plus gros pour écran tactile
+        # ===== 4. BOUTONS D'ACTION =====
         buttons_layout = QVBoxLayout()
         buttons_layout.setSpacing(12)
         
-        # Bouton Payer - TRÈS GRAND pour écran tactile
         self.pay_btn = QPushButton(_("btn_pay"))
-        self.pay_btn.setMinimumHeight(80)
+        self.pay_btn.setMinimumHeight(60)
         self.pay_btn.setStyleSheet("""
             QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
-                    stop:0 #10b981, stop:1 #059669);
-                color: white;
-                border: none;
-                border-radius: 14px;
-                font-size: 24px;
-                font-weight: bold;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #8b5cf6, stop:1 #6366f1);
+                color: white; border: none; border-radius: 12px; font-size: 20px; font-weight: bold;
             }
             QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
-                    stop:0 #059669, stop:1 #047857);
-            }
-            QPushButton:pressed {
-                background: #047857;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #7c3aed, stop:1 #4f46e5);
             }
         """)
         self.pay_btn.clicked.connect(self.process_payment)
         buttons_layout.addWidget(self.pay_btn)
         
-        # Boutons secondaires - Plus gros
         secondary_layout = QHBoxLayout()
         secondary_layout.setSpacing(10)
         
-        self.clear_btn = QPushButton(_("btn_clear_cart"))
-        self.clear_btn.setMinimumHeight(55)
-        self.clear_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #e74c3c;
-                color: white;
-                border: none;
-                border-radius: 10px;
-                font-size: 16px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #c0392b;
-            }
-        """)
+        def make_action_btn(text, color, hover_color):
+            btn = QPushButton(text)
+            btn.setMinimumHeight(50)
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {color}; color: white; border: none;
+                    border-radius: 10px; font-size: 14px; font-weight: bold;
+                }}
+                QPushButton:hover {{ background-color: {hover_color}; }}
+            """)
+            return btn
+        
+        self.clear_btn = make_action_btn(_("btn_clear_cart"), "#e74c3c", "#c0392b")
         self.clear_btn.clicked.connect(self.clear_cart)
         secondary_layout.addWidget(self.clear_btn)
-
         
-        self.discount_btn = QPushButton(_("btn_discount"))
-        self.discount_btn.setMinimumHeight(55)
-        self.discount_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #f39c12;
-                color: white;
-                border: none;
-                border-radius: 10px;
-                font-size: 16px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #e67e22;
-            }
-        """)
+        self.discount_btn = make_action_btn(_("btn_discount"), "#f39c12", "#e67e22")
         self.discount_btn.clicked.connect(self.apply_discount)
         secondary_layout.addWidget(self.discount_btn)
         
-        # Bouton Retour
-        self.return_btn_pos = QPushButton(_("btn_returns"))
-        self.return_btn_pos.setMinimumHeight(55)
-        self.return_btn_pos.setStyleSheet("""
-            QPushButton {
-                background-color: #95a5a6;
-                color: white;
-                border: none;
-                border-radius: 10px;
-                font-size: 16px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #7f8c8d;
-            }
-        """)
+        self.return_btn_pos = make_action_btn(_("btn_returns"), "#95a5a6", "#7f8c8d")
         self.return_btn_pos.clicked.connect(self.open_returns)
         secondary_layout.addWidget(self.return_btn_pos)
         
-        # Bouton En Attente (Hold)
-        self.hold_btn = QPushButton(_("btn_hold"))
-        self.hold_btn.setMinimumHeight(55)
-        self.hold_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #9b59b6;
-                color: white;
-                border: none;
-                border-radius: 10px;
-                font-size: 16px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #8e44ad;
-            }
-        """)
+        self.hold_btn = make_action_btn(_("btn_hold"), "#9b59b6", "#8e44ad")
         self.hold_btn.clicked.connect(self.hold_current_cart)
         secondary_layout.addWidget(self.hold_btn)
         
-        # Bouton Récupérer (held carts)
-        self.retrieve_btn = QPushButton(_("btn_retrieve"))
-        self.retrieve_btn.setMinimumHeight(55)
-        self.retrieve_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #3498db;
-                color: white;
-                border: none;
-                border-radius: 10px;
-                font-size: 16px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #2980b9;
-            }
-        """)
+        self.retrieve_btn = make_action_btn(_("btn_retrieve"), "#3498db", "#2980b9")
         self.retrieve_btn.clicked.connect(self.show_held_carts)
         secondary_layout.addWidget(self.retrieve_btn)
         
         buttons_layout.addLayout(secondary_layout)
         layout.addLayout(buttons_layout)
         
+        # ===== 5. CLIENT (en bas) =====
+        client_separator = QFrame()
+        client_separator.setFrameShape(QFrame.HLine)
+        client_separator.setStyleSheet("background-color: #e5e7eb; max-height: 1px; margin-top: 5px;")
+        layout.addWidget(client_separator)
+        
+        customer_layout = QHBoxLayout()
+        
+        self.customer_combo = QComboBox()
+        self.customer_combo.setMinimumHeight(45)
+        self.customer_combo.setEditable(True)
+        self.customer_combo.setInsertPolicy(QComboBox.NoInsert)
+        
+        self.customer_combo.lineEdit().setPlaceholderText("🔍 Rechercher un client...")
+        self.customer_combo.setStyleSheet("""
+            QComboBox {
+                background-color: white; border: 2px solid #e0e0e0; border-radius: 8px;
+                padding: 5px 10px; font-size: 16px;
+            }
+            QComboBox:focus { border-color: #3498db; }
+        """)
+        
+        self.load_customers()
+        
+        customer_names = [self.customer_combo.itemText(i) for i in range(self.customer_combo.count())]
+        self.customer_completer_model = QStringListModel(customer_names)
+        
+        self.customer_completer = QCompleter(self.customer_completer_model, self)
+        self.customer_completer.setCompletionMode(QCompleter.PopupCompletion)
+        self.customer_completer.setFilterMode(Qt.MatchContains)
+        self.customer_completer.setCaseSensitivity(Qt.CaseInsensitive)
+        
+        def on_completer_activated(text):
+            for i in range(self.customer_combo.count()):
+                if self.customer_combo.itemText(i) == text:
+                    self.customer_combo.setCurrentIndex(i)
+                    break
+        
+        self.customer_completer.activated.connect(on_completer_activated)
+        self.customer_combo.setCompleter(self.customer_completer)
+        
+        self.customer_combo.lineEdit().installEventFilter(self)
+        self.customer_combo.currentIndexChanged.connect(self.on_customer_selected)
+
+        def on_text_changed(text):
+            if not text.strip():
+                self.customer_combo.setCurrentIndex(0)
+                
+        self.customer_combo.lineEdit().textChanged.connect(on_text_changed)
+        
+        customer_layout.addWidget(self.customer_combo, 1)
+        
+        self.search_customer_btn = QPushButton("🔍")
+        self.search_customer_btn.setFixedSize(40, 40)
+        self.search_customer_btn.setToolTip(_("btn_search"))
+        self.search_customer_btn.setStyleSheet("""
+            QPushButton { background-color: #e0f7fa; border: 2px solid #b2ebf2; border-radius: 8px; color: #0097a7; }
+            QPushButton:hover { background-color: #b2ebf2; }
+        """)
+        self.search_customer_btn.clicked.connect(self.open_customer_search)
+        customer_layout.addWidget(self.search_customer_btn)
+        
+        self.clear_customer_btn = QPushButton("❌")
+        self.clear_customer_btn.setFixedSize(40, 40)
+        self.clear_customer_btn.setToolTip("Réinitialiser")
+        self.clear_customer_btn.setStyleSheet("""
+            QPushButton { background-color: #ffebee; border: 2px solid #ffcdd2; border-radius: 8px; color: #c62828; }
+            QPushButton:hover { background-color: #ffcdd2; }
+        """)
+        self.clear_customer_btn.clicked.connect(self.clear_customer_selection)
+        customer_layout.addWidget(self.clear_customer_btn)
+        
+        self.add_customer_btn = QPushButton("➕")
+        self.add_customer_btn.setFixedSize(40, 40)
+        self.add_customer_btn.setToolTip("Ajouter un nouveau client")
+        self.add_customer_btn.setStyleSheet("""
+            QPushButton { background-color: #ecfdf5; border: 2px solid #a7f3d0; border-radius: 8px; font-size: 18px; color: #059669; }
+            QPushButton:hover { background-color: #a7f3d0; }
+        """)
+        self.add_customer_btn.clicked.connect(self.add_new_customer_from_pos)
+        customer_layout.addWidget(self.add_customer_btn)
+        
+        layout.addLayout(customer_layout)
+        
         panel.setLayout(layout)
         return panel
+        
     
     def create_shortcuts_grid(self):
         """Créer la grille de raccourcis (Grid Layout)"""
