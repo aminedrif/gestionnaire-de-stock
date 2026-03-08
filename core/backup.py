@@ -3,7 +3,6 @@
 Système de sauvegarde automatique et manuelle
 """
 import shutil
-import zipfile
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Optional, Dict
@@ -19,23 +18,17 @@ class BackupManager:
         self.backup_dir = config.BACKUP_DIR
         self.backup_dir.mkdir(exist_ok=True)
     
-    def create_backup(self, destination: Optional[Path] = None, 
-                     compress: Optional[bool] = None) -> tuple[bool, str, Optional[Path]]:
+    def create_backup(self, destination: Optional[Path] = None) -> tuple[bool, str, Optional[Path]]:
         """
         Créer une sauvegarde de la base de données
         
         Args:
             destination: Dossier de destination (None = dossier par défaut)
-            compress: Compresser en ZIP (None = utiliser la config)
             
         Returns:
             (success, message, backup_path)
         """
         try:
-            # Utiliser la configuration si compress n'est pas spécifié
-            if compress is None:
-                compress = config.BACKUP_CONFIG.get('compress_backups', False)
-
             # Générer le nom du fichier de sauvegarde
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             backup_name = f"minimarket_backup_{timestamp}"
@@ -56,32 +49,8 @@ class BackupManager:
             if not success:
                 return False, "Erreur lors de la copie de la base de données", None
             
-            # Compresser si demandé
-            if compress:
-                zip_path = destination / f"{backup_name}.zip"
-                
-                with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                    # 1. Add Database
-                    zipf.write(db_backup_path, db_backup_path.name)
-                    
-                    # 2. Add Shortcut Images
-                    shortcuts_images_dir = config.DATA_DIR / "shortcuts_images"
-                    if shortcuts_images_dir.exists():
-                        for img_file in shortcuts_images_dir.glob("*"):
-                            if img_file.is_file():
-                                # Add to zip inside a 'shortcuts_images' folder
-                                zipf.write(img_file, arcname=f"shortcuts_images/{img_file.name}")
-                
-                # Supprimer le fichier .db non compressé
-                db_backup_path.unlink()
-                
-                final_path = zip_path
-                logger.log_backup(str(zip_path), True)
-            else:
-                final_path = db_backup_path
-                logger.log_backup(str(db_backup_path), True)
-            
-            return True, f"Sauvegarde créée: {final_path.name}", final_path
+            logger.log_backup(str(db_backup_path), True)
+            return True, f"Sauvegarde créée: {db_backup_path.name}", db_backup_path
             
         except Exception as e:
             error_msg = f"Erreur lors de la sauvegarde: {str(e)}"
@@ -93,7 +62,7 @@ class BackupManager:
         Restaurer une sauvegarde
         
         Args:
-            backup_path: Chemin de la sauvegarde
+            backup_path: Chemin de la sauvegarde (.db)
             
         Returns:
             (success, message)
@@ -102,47 +71,13 @@ class BackupManager:
             if not backup_path.exists():
                 return False, "Fichier de sauvegarde introuvable"
             
-            # Si c'est un fichier ZIP, décompresser d'abord
-            if backup_path.suffix == '.zip':
-                temp_dir = config.DATA_DIR / "temp_restore"
-                temp_dir.mkdir(exist_ok=True)
-                
-                with zipfile.ZipFile(backup_path, 'r') as zipf:
-                    zipf.extractall(temp_dir)
-                
-                # Trouver le fichier .db
-                db_files = list(temp_dir.glob("*.db"))
-                if not db_files:
-                    shutil.rmtree(temp_dir)
-                    return False, "Aucune base de données trouvée dans l'archive"
-                
-                db_file = db_files[0]
-            else:
-                db_file = backup_path
-            
             # Créer une sauvegarde de la base actuelle avant restauration
             current_backup = config.DATA_DIR / f"before_restore_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
             if config.DATABASE_PATH.exists():
                 shutil.copy2(config.DATABASE_PATH, current_backup)
             
             # Restaurer
-            success = db.restore_database(db_file)
-            
-            # Restaurer les images si présentes
-            if success and backup_path.suffix == '.zip':
-                temp_img_dir = temp_dir / "shortcuts_images"
-                if temp_img_dir.exists():
-                    target_img_dir = config.DATA_DIR / "shortcuts_images"
-                    target_img_dir.mkdir(exist_ok=True)
-                    
-                    # Copier les images extraites
-                    for img in temp_img_dir.glob("*"):
-                        if img.is_file():
-                            shutil.copy2(img, target_img_dir / img.name)
-                            
-            # Nettoyer le dossier temporaire si créé
-            if backup_path.suffix == '.zip':
-                shutil.rmtree(temp_dir)
+            success = db.restore_database(backup_path)
             
             if success:
                 logger.info(f"Base de données restaurée depuis: {backup_path}")
@@ -165,8 +100,7 @@ class BackupManager:
         if not config.BACKUP_CONFIG['auto_backup']:
             return False, "Sauvegarde automatique désactivée"
         
-        compress = config.BACKUP_CONFIG['compress_backups']
-        success, message, _ = self.create_backup(compress=compress)
+        success, message, _ = self.create_backup()
         
         if success:
             # Nettoyer les anciennes sauvegardes
@@ -200,26 +134,89 @@ class BackupManager:
     
     def list_backups(self) -> List[Dict]:
         """
-        Lister toutes les sauvegardes disponibles
+        Lister toutes les sauvegardes disponibles (.xlsx et .db)
         
         Returns:
             Liste de dictionnaires avec infos sur les sauvegardes
         """
         backups = []
         
-        for backup_file in sorted(self.backup_dir.glob("minimarket_backup_*"), reverse=True):
+        # Collect all backup files (.xlsx auto backups + .db manual backups)
+        all_files = []
+        all_files.extend(self.backup_dir.glob("auto_backup_*.xlsx"))
+        all_files.extend(self.backup_dir.glob("minimarket_backup_*.db"))
+        
+        for backup_file in sorted(all_files, key=lambda f: f.stat().st_mtime, reverse=True):
             stat = backup_file.stat()
+            
+            # Determine type
+            if backup_file.suffix == '.xlsx':
+                backup_type = 'Excel'
+            else:
+                backup_type = 'Base de données'
+            
+            # Format size
+            size_bytes = stat.st_size
+            if size_bytes < 1024:
+                size_str = f"{size_bytes} o"
+            elif size_bytes < 1024 * 1024:
+                size_str = f"{size_bytes / 1024:.1f} Ko"
+            else:
+                size_str = f"{size_bytes / (1024 * 1024):.2f} Mo"
             
             backups.append({
                 'path': backup_file,
                 'name': backup_file.name,
-                'size': stat.st_size,
-                'size_mb': round(stat.st_size / (1024 * 1024), 2),
+                'type': backup_type,
+                'size': size_bytes,
+                'size_str': size_str,
                 'created': datetime.fromtimestamp(stat.st_mtime),
-                'created_str': datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S'),
+                'created_str': datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M'),
             })
         
         return backups
+    
+    def delete_backup(self, backup_path: Path) -> tuple[bool, str]:
+        """
+        Supprimer un fichier de sauvegarde
+        
+        Args:
+            backup_path: Chemin du fichier à supprimer
+            
+        Returns:
+            (success, message)
+        """
+        try:
+            if not backup_path.exists():
+                return False, "Fichier introuvable"
+            
+            backup_path.unlink()
+            logger.info(f"Sauvegarde supprimée: {backup_path.name}")
+            return True, f"Sauvegarde supprimée: {backup_path.name}"
+            
+        except Exception as e:
+            error_msg = f"Erreur lors de la suppression: {str(e)}"
+            logger.error(error_msg)
+            return False, error_msg
+    
+    def get_total_backup_size(self) -> str:
+        """
+        Calculer la taille totale des sauvegardes
+        
+        Returns:
+            Taille formatée (ex: '15.3 Mo')
+        """
+        total = 0
+        for f in self.backup_dir.iterdir():
+            if f.is_file():
+                total += f.stat().st_size
+        
+        if total < 1024:
+            return f"{total} o"
+        elif total < 1024 * 1024:
+            return f"{total / 1024:.1f} Ko"
+        else:
+            return f"{total / (1024 * 1024):.1f} Mo"
     
     def export_to_usb(self, usb_path: Path) -> tuple[bool, str]:
         """

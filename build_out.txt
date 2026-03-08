@@ -1,0 +1,50 @@
+Inno Setup 6 Command-Line Compiler
+Copyright (C) 1997-2023 Jordan Russell. All rights reserved.
+Portions Copyright (C) 2000-2023 Martijn Laan. All rights reserved.
+Portions Copyright (C) 2001-2004 Alex Yackimoff. All rights reserved.
+https://www.innosetup.com
+
+Compiler engine version: Inno Setup 6.2.2
+
+Preprocessing
+   Reading file: C:\Program Files (x86)\Inno Setup 6\ISPPBuiltins.iss
+Parsing [Setup] section, line 2
+Parsing [Setup] section, line 3
+Parsing [Setup] section, line 4
+Parsing [Setup] section, line 5
+Parsing [Setup] section, line 6
+Parsing [Setup] section, line 7
+Parsing [Setup] section, line 8
+Parsing [Setup] section, line 9
+Parsing [Setup] section, line 10
+Parsing [Setup] section, line 11
+Parsing [Setup] section, line 12
+Parsing [Setup] section, line 13
+Parsing [Setup] section, line 14
+Reading file (WizardImageFile)
+Reading file (WizardSmallImageFile)
+Preparing Setup program executable
+   Updating icons (SETUP.E32)
+   Updating version info (SETUP.E32)
+Determining language code pages
+   Reading file: C:\Program Files (x86)\Inno Setup 6\Default.isl
+   Messages in script file
+Reading default messages from Default.isl
+Parsing [LangOptions], [Messages], and [CustomMessages] sections
+   Reading file: C:\Program Files (x86)\Inno Setup 6\Default.isl
+   Messages in script file
+Reading [Code] section
+Parsing [Icons] section, line 20
+Parsing [Icons] section, line 21
+Parsing [Run] section, line 24
+Parsing [Files] section, line 17
+Creating setup files
+   Updating icons (SETUP.EXE)
+   Compressing: C:\Users\msi\Desktop\superette stock\dist\DamDevPOS.exe
+   Compressing Setup program executable
+   Updating version info (SETUP.EXE)
+   Updating manifest (SETUP.EXE)
+
+
+Successful compile (26,047 sec). Resulting Setup program filename is:
+C:\Users\msi\Desktop\superette stock\dist\DamDevPOS_Setup.exe

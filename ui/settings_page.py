@@ -339,6 +339,79 @@ class SettingsPage(QWidget):
         import_group.setLayout(import_form)
         layout.addWidget(import_group)
         
+        # Section Gestionnaire de Sauvegardes
+        backup_mgr_group = QGroupBox("📁 Gestionnaire de Sauvegardes")
+        backup_mgr_group.setStyleSheet("""
+            QGroupBox {
+                font-weight: bold;
+                border: 2px solid #e2e8f0;
+                border-radius: 8px;
+                margin-top: 10px;
+                padding-top: 15px;
+            }
+            QGroupBox::title {
+                color: #3498db;
+            }
+        """)
+        backup_mgr_layout = QVBoxLayout()
+        
+        # Header with total size info
+        mgr_header = QHBoxLayout()
+        self.backup_total_label = QLabel("Chargement...")
+        self.backup_total_label.setStyleSheet("color: #6b7280; font-size: 13px;")
+        mgr_header.addWidget(self.backup_total_label)
+        mgr_header.addStretch()
+        
+        refresh_backups_btn = QPushButton("🔄 Rafraîchir")
+        refresh_backups_btn.setStyleSheet("background-color: #3498db; color: white; padding: 6px 15px; border-radius: 5px; font-weight: bold;")
+        refresh_backups_btn.clicked.connect(self.load_backups_table)
+        mgr_header.addWidget(refresh_backups_btn)
+        
+        delete_all_btn = QPushButton("🗑️ Tout supprimer")
+        delete_all_btn.setStyleSheet("background-color: #e74c3c; color: white; padding: 6px 15px; border-radius: 5px; font-weight: bold;")
+        delete_all_btn.clicked.connect(self.delete_all_backups)
+        mgr_header.addWidget(delete_all_btn)
+        
+        backup_mgr_layout.addLayout(mgr_header)
+        
+        # Backups table
+        self.backups_table = QTableWidget()
+        self.backups_table.setColumnCount(5)
+        self.backups_table.setHorizontalHeaderLabels(["Nom", "Type", "Taille", "Date", "Action"])
+        self.backups_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        self.backups_table.setColumnWidth(1, 120)
+        self.backups_table.setColumnWidth(2, 100)
+        self.backups_table.setColumnWidth(3, 150)
+        self.backups_table.setColumnWidth(4, 100)
+        self.backups_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.backups_table.setAlternatingRowColors(True)
+        self.backups_table.verticalHeader().setDefaultSectionSize(40)
+        self.backups_table.setMaximumHeight(300)
+        self.backups_table.setStyleSheet("""
+            QTableWidget {
+                border: 1px solid #e5e7eb;
+                border-radius: 6px;
+                background-color: white;
+                font-size: 12px;
+            }
+            QTableWidget::item { padding: 5px; }
+            QTableWidget::item:alternate { background-color: #f9fafb; }
+            QHeaderView::section {
+                background-color: #f1f5f9;
+                padding: 8px;
+                border: none;
+                border-bottom: 2px solid #e5e7eb;
+                font-weight: bold;
+                color: #4b5563;
+            }
+        """)
+        backup_mgr_layout.addWidget(self.backups_table)
+        
+        backup_mgr_group.setLayout(backup_mgr_layout)
+        layout.addWidget(backup_mgr_group)
+        
+        # Load backups on creation
+        self.load_backups_table()
         # Section Réinitialisation (DANGER)
         reset_group = QGroupBox(_('group_reset'))
         reset_group.setStyleSheet("""
@@ -400,6 +473,95 @@ class SettingsPage(QWidget):
         except Exception as e:
             QMessageBox.critical(self, _('title_error'), f"{_('title_error')}: {e}")
             logger.error(f"Erreur save backup config: {e}")
+
+    def load_backups_table(self):
+        """Charger la liste des sauvegardes dans la table"""
+        try:
+            from core.backup import backup_manager
+            
+            backups = backup_manager.list_backups()
+            total_size = backup_manager.get_total_backup_size()
+            
+            self.backup_total_label.setText(f"📊 {len(backups)} sauvegardes — Espace total: {total_size}")
+            
+            self.backups_table.setRowCount(0)
+            for backup in backups:
+                row = self.backups_table.rowCount()
+                self.backups_table.insertRow(row)
+                
+                self.backups_table.setItem(row, 0, QTableWidgetItem(backup['name']))
+                self.backups_table.setItem(row, 1, QTableWidgetItem(backup['type']))
+                self.backups_table.setItem(row, 2, QTableWidgetItem(backup['size_str']))
+                self.backups_table.setItem(row, 3, QTableWidgetItem(backup['created_str']))
+                
+                # Delete button
+                del_btn = QPushButton("🗑️")
+                del_btn.setFixedSize(35, 30)
+                del_btn.setCursor(Qt.PointingHandCursor)
+                del_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #fef2f2;
+                        border: 1px solid #fecaca;
+                        border-radius: 5px;
+                        color: #dc2626;
+                        font-size: 14px;
+                    }
+                    QPushButton:hover {
+                        background-color: #fee2e2;
+                    }
+                """)
+                # Store path in button property
+                del_btn.setProperty("backup_path", str(backup['path']))
+                del_btn.clicked.connect(self.delete_backup_entry)
+                self.backups_table.setCellWidget(row, 4, del_btn)
+                
+        except Exception as e:
+            logger.error(f"Erreur chargement sauvegardes: {e}")
+
+    def delete_backup_entry(self):
+        """Supprimer une sauvegarde spécifique"""
+        from pathlib import Path
+        from core.backup import backup_manager
+        
+        btn = self.sender()
+        if not btn:
+            return
+        
+        backup_path = Path(btn.property("backup_path"))
+        
+        reply = QMessageBox.question(self, "Confirmation", 
+            f"Supprimer la sauvegarde ?\n{backup_path.name}",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        
+        if reply == QMessageBox.Yes:
+            success, msg = backup_manager.delete_backup(backup_path)
+            if success:
+                self.load_backups_table()
+            else:
+                QMessageBox.warning(self, "Erreur", msg)
+
+    def delete_all_backups(self):
+        """Supprimer toutes les sauvegardes"""
+        from core.backup import backup_manager
+        
+        backups = backup_manager.list_backups()
+        if not backups:
+            QMessageBox.information(self, "Info", "Aucune sauvegarde à supprimer")
+            return
+        
+        reply = QMessageBox.warning(self, "⚠️ Attention", 
+            f"Voulez-vous vraiment supprimer les {len(backups)} sauvegardes ?\nCette action est irréversible !",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        
+        if reply == QMessageBox.Yes:
+            deleted = 0
+            for backup in backups:
+                success, _ = backup_manager.delete_backup(backup['path'])
+                if success:
+                    deleted += 1
+            
+            self.load_backups_table()
+            QMessageBox.information(self, "Succès", f"{deleted} sauvegarde(s) supprimée(s)")
 
     def export_data(self):
         """Exporter les données en Excel (sauvegarde complète)"""
