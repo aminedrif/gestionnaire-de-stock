@@ -677,7 +677,37 @@ class CustomersPage(QWidget):
             
         # Adjust column width for actions
         self.table.setColumnWidth(5, 180)
+        
+        # Update stat cards
+        self.update_stat_cards()
+
+    def update_stat_cards(self):
+        """Mettre à jour les valeurs des cartes statistiques"""
+        try:
+            from PyQt5.QtWidgets import QLabel
+            all_customers = customer_manager.get_all_customers()
+            total_clients = len(all_customers)
+            clients_with_debt = sum(1 for c in all_customers if float(c.get('current_credit', 0) or 0) > 0)
+            total_debt = sum(float(c.get('current_credit', 0) or 0) for c in all_customers)
             
+            # Update each card's value label (objectName = 'stat_value')
+            if hasattr(self, 'stat_card_total'):
+                val_lbl = self.stat_card_total.findChild(QLabel, "stat_value")
+                if val_lbl:
+                    val_lbl.setText(str(total_clients))
+            
+            if hasattr(self, 'stat_card_debt'):
+                val_lbl = self.stat_card_debt.findChild(QLabel, "stat_value")
+                if val_lbl:
+                    val_lbl.setText(str(clients_with_debt))
+            
+            if hasattr(self, 'stat_card_amount'):
+                val_lbl = self.stat_card_amount.findChild(QLabel, "stat_value")
+                if val_lbl:
+                    val_lbl.setText(f"{total_debt:,.0f} DA")
+        except Exception as e:
+            logger.error(f"Erreur mise à jour stats clients: {e}")
+
     def open_new_dialog(self):
         if CustomerFormDialog(parent=self).exec_():
             self.load_customers()
