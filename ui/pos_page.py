@@ -618,7 +618,7 @@ class POSPage(QWidget):
         self.barcode_input.setPlaceholderText(_("placeholder_scan"))
         
         if hasattr(self, 'popup_search_btn'):
-            self.popup_search_btn.setText(_("btn_search_product") if i18n_manager.get("btn_search_product") != "btn_search_product" else "🔍 Recherche Produit")
+            self.popup_search_btn.setText(_("btn_search_product") if i18n_manager.get("btn_search_product") != "btn_search_product" else "Recherche Produit")
         
         self.calc_group.setTitle(_("group_calculator"))
         self.calc_add_btn.setText(_("btn_add_to_cart"))
@@ -637,8 +637,8 @@ class POSPage(QWidget):
         self.print_receipt_cb.setText(_("checkbox_print_ticket"))
         
         # Update Payment Method Items
-        self.btn_pay_cash.setText("💵 " + _("payment_cash"))
-        self.btn_pay_credit.setText("💳 " + _("payment_credit"))
+        self.btn_pay_cash.setText(_("payment_cash"))
+        self.btn_pay_credit.setText(_("payment_credit"))
         
         self.pay_btn.setText(_("btn_pay"))
         self.clear_btn.setText(_("btn_clear_cart"))
@@ -652,30 +652,118 @@ class POSPage(QWidget):
 
     def init_ui(self):
         """Initialiser l'interface"""
-        layout = QHBoxLayout()
-        layout.setSpacing(15)
-        layout.setContentsMargins(15, 15, 15, 15)
+        main_layout = QVBoxLayout()
+        main_layout.setSpacing(0)
+        main_layout.setContentsMargins(8, 8, 8, 8)
         
-        # Colonne gauche - Scanner et produits
+        # Top bar: Scanner + Search (full width)
+        top_bar = self.create_top_bar()
+        main_layout.addWidget(top_bar)
+        
+        # Main content: 3 columns
+        content_layout = QHBoxLayout()
+        content_layout.setSpacing(8)
+        
+        # Left: Shortcuts + Calculator (~22%)
         self.left_panel_container = self.create_left_panel()
-        layout.addWidget(self.left_panel_container, 1) # Equal width
+        content_layout.addWidget(self.left_panel_container, 22)
         
-        # Colonne droite - Panier et paiement
+        # Center: Cart (takes max space ~48%)
+        self.center_panel = self.create_center_panel()
+        content_layout.addWidget(self.center_panel, 48)
+        
+        # Right: Total + Payment + Actions + Client (~30%)
         self.right_panel_container = self.create_right_panel()
-        layout.addWidget(self.right_panel_container, 1) # Equal width
+        content_layout.addWidget(self.right_panel_container, 30)
         
-        self.setLayout(layout)
+        main_layout.addLayout(content_layout, 1)
         
-        # Focus sur le scanner
+        self.setLayout(main_layout)
+        
+        # Focus scanner
         self.barcode_input.setFocus()
 
-        # Raccourcis Clavier POS
-        QShortcut(QKeySequence("F9"), self, self.process_payment) # F9 pour payer
-        QShortcut(QKeySequence("Ctrl+F"), self, lambda: self.search_input.setFocus()) # Ctrl+F pour recherche
-        QShortcut(QKeySequence("Ctrl+Space"), self, lambda: self.barcode_input.setFocus()) # Ctrl+Espace pour scanner
+        # Keyboard shortcuts
+        QShortcut(QKeySequence("F9"), self, self.process_payment)
+        QShortcut(QKeySequence("Ctrl+F"), self, lambda: self.search_input.setFocus())
+        QShortcut(QKeySequence("Ctrl+Space"), self, lambda: self.barcode_input.setFocus())
         
-        # Overlay Panier en Attente
+        # Held cart overlay
         self.create_held_cart_overlay()
+
+    def create_top_bar(self):
+        """Barre supérieure: Scanner + Recherche (pleine largeur)"""
+        _ = i18n_manager.get
+        
+        bar = QFrame()
+        bar.setObjectName("topBar")
+        bar.setStyleSheet("""
+            QFrame#topBar {
+                background-color: #1e1b4b;
+                border-radius: 10px;
+                margin-bottom: 8px;
+            }
+        """)
+        bar.setFixedHeight(56)
+        
+        layout = QHBoxLayout(bar)
+        layout.setContentsMargins(12, 8, 12, 8)
+        layout.setSpacing(10)
+        
+        # POS Title
+        title = QLabel("CAISSE")
+        title.setStyleSheet("font-size: 16px; font-weight: 900; color: #a5b4fc; letter-spacing: 2px; background: transparent;")
+        layout.addWidget(title)
+        
+        # Barcode input
+        self.barcode_input = QLineEdit()
+        self.barcode_input.setPlaceholderText(_("placeholder_scan"))
+        self.barcode_input.setMinimumHeight(38)
+        self.barcode_input.setStyleSheet("""
+            QLineEdit {
+                padding: 6px 14px;
+                border: 2px solid #4338ca;
+                border-radius: 8px;
+                font-size: 14px;
+                background-color: #312e81;
+                color: white;
+            }
+            QLineEdit:focus {
+                border-color: #818cf8;
+                background-color: #3730a3;
+            }
+            QLineEdit::placeholder { color: #6366f1; }
+        """)
+        self.barcode_input.returnPressed.connect(self.scan_product)
+        self.scan_timer = QTimer()
+        self.scan_timer.setSingleShot(True)
+        self.scan_timer.timeout.connect(self.auto_scan_product)
+        self.barcode_input.textChanged.connect(self.on_barcode_text_changed)
+        layout.addWidget(self.barcode_input, 1)
+        
+        # Product search button
+        self.popup_search_btn = QPushButton("Recherche Produit")
+        self.popup_search_btn.setMinimumHeight(38)
+        self.popup_search_btn.setCursor(Qt.PointingHandCursor)
+        self.popup_search_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4338ca;
+                color: white;
+                font-size: 13px;
+                font-weight: bold;
+                border: none;
+                border-radius: 8px;
+                padding: 0 18px;
+            }
+            QPushButton:hover { background-color: #4f46e5; }
+        """)
+        self.popup_search_btn.clicked.connect(self.open_search_dialog)
+        layout.addWidget(self.popup_search_btn)
+        
+        # Keep scanner_group reference for update_ui_text compatibility
+        self.scanner_group = type('obj', (object,), {'setTitle': lambda self, t: None})()
+        
+        return bar
     
     
     def create_held_cart_overlay(self):
@@ -751,142 +839,59 @@ class POSPage(QWidget):
         self.held_overlay.show()
 
     def create_left_panel(self):
-        """Créer le panneau gauche"""
+        """Panneau gauche: Raccourcis + Calculatrice"""
         panel = QFrame()
         panel.setObjectName("leftPanel")
         panel.setStyleSheet("""
             QFrame#leftPanel {
-                background-color: white;
-                border-radius: 16px;
-                border: 1px solid #e5e7eb;
+                background-color: #f8fafc;
+                border-radius: 10px;
+                border: 1px solid #e2e8f0;
             }
         """)
         
         layout = QVBoxLayout()
-        layout.setSpacing(15)
+        layout.setSpacing(6)
+        layout.setContentsMargins(8, 10, 8, 8)
         
         _ = i18n_manager.get
         
-        # En-tête avec TOTAL et Remise (grand)
-        header_frame = QFrame()
-        header_frame.setStyleSheet("""
-            QFrame {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
-                    stop:0 #8b5cf6, stop:1 #6366f1);
-                border-radius: 12px;
-                padding: 20px;
-                margin-bottom: 10px;
-            }
-        """)
-        header_layout_inner = QVBoxLayout(header_frame)
+        # Section Title: Raccourcis
+        shortcuts_title = QLabel("Raccourcis")
+        shortcuts_title.setStyleSheet("font-size: 13px; font-weight: 800; color: #374151; letter-spacing: 1px; background: transparent; padding-left: 4px;")
+        layout.addWidget(shortcuts_title)
         
-        # Label TOTAL (très grand)
-        self.header_total_label = QLabel(_("label_total").format(0.0))
-        self.header_total_label.setStyleSheet("font-size: 38px; font-weight: bold; color: white; background: transparent;")
-        header_layout_inner.addWidget(self.header_total_label)
+        # Shortcuts Grid
+        self.shortcuts_container = self.create_shortcuts_grid()
+        layout.addWidget(self.shortcuts_container, 1)  # Takes available space
         
-        # Label Remise (sous le total)
-        self.header_discount_label = QLabel(_("label_discount").format(0.0))
-        self.header_discount_label.setStyleSheet("font-size: 16px; color: #fbbf24; background: transparent;")
-        header_layout_inner.addWidget(self.header_discount_label)
+        # Separator
+        sep = QFrame()
+        sep.setFrameShape(QFrame.HLine)
+        sep.setStyleSheet("background-color: #e2e8f0; max-height: 1px;")
+        layout.addWidget(sep)
         
-        layout.addWidget(header_frame)
+        # Calculator Section
+        calc_title = QLabel("Montant libre")
+        calc_title.setStyleSheet("font-size: 13px; font-weight: 800; color: #374151; letter-spacing: 1px; background: transparent; padding-left: 4px;")
+        layout.addWidget(calc_title)
         
-        # Scanner + Recherche Produit (même ligne, sans titre)
-        scan_row = QHBoxLayout()
-        scan_row.setSpacing(8)
-        
-        self.barcode_input = QLineEdit()
-        self.barcode_input.setPlaceholderText(_("placeholder_scan"))
-        self.barcode_input.setMinimumHeight(45)
-        self.barcode_input.setStyleSheet("""
-            QLineEdit {
-                padding: 8px 12px;
-                border: 2px solid #8b5cf6;
-                border-radius: 8px;
-                font-size: 14px;
-                background-color: white;
-                color: #1f2937;
-            }
-            QLineEdit:focus {
-                border-color: #6366f1;
-                background-color: #faf5ff;
-            }
-            QLineEdit::placeholder {
-                color: #9ca3af;
-            }
-        """)
-        self.barcode_input.returnPressed.connect(self.scan_product)
-        # Auto-scan après un court délai (pour scanners automatiques)
-        self.scan_timer = QTimer()
-        self.scan_timer.setSingleShot(True)
-        self.scan_timer.timeout.connect(self.auto_scan_product)
-        self.barcode_input.textChanged.connect(self.on_barcode_text_changed)
-        scan_row.addWidget(self.barcode_input, 1)
-        
-        # Bouton Recherche Produit
-        self.popup_search_btn = QPushButton("🔍 Recherche Produit")
-        self.popup_search_btn.setMinimumHeight(45)
-        self.popup_search_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #3498db;
-                color: white;
-                font-size: 14px;
-                font-weight: bold;
-                border: none;
-                border-radius: 8px;
-                padding: 0 15px;
-            }
-            QPushButton:hover {
-                background-color: #2980b9;
-            }
-        """)
-        self.popup_search_btn.clicked.connect(self.open_search_dialog)
-        scan_row.addWidget(self.popup_search_btn)
-        
-        layout.addLayout(scan_row)
-        # Keep scanner_group reference for update_ui_text compatibility
-        self.scanner_group = type('obj', (object,), {'setTitle': lambda self, t: None})()
-
-
-        
-        # Calculatrice intégrée (Montant Libre) - EN BAS
-        self.calc_group = QGroupBox(_("group_calculator"))
-        self.calc_group.setStyleSheet("""
-            QGroupBox {
-                font-size: 14px;
-                font-weight: bold;
-                border: 2px solid #27ae60;
-                border-radius: 8px;
-                margin-top: 10px;
-                padding-top: 15px;
-                background-color: #f8fff8;
-            }
-            QGroupBox::title {
-                color: #27ae60;
-            }
-        """)
-        calc_layout = QVBoxLayout()
-        
-        # Écran d'affichage
+        # Display
         self.calc_display = QLineEdit("0")
         self.calc_display.setReadOnly(True)
         self.calc_display.setAlignment(Qt.AlignRight)
-        self.calc_display.setMinimumHeight(50)
+        self.calc_display.setFixedHeight(40)
         self.calc_display.setStyleSheet("""
-            font-size: 24px; 
-            font-weight: bold;
-            padding: 8px; 
-            border: 2px solid #27ae60; 
-            border-radius: 8px;
-            background-color: #e8f5e9;
-            color: #2c3e50;
+            font-size: 22px; font-weight: bold;
+            padding: 4px 10px; 
+            border: 2px solid #d1d5db; border-radius: 8px;
+            background-color: white; color: #111827;
         """)
-        calc_layout.addWidget(self.calc_display)
+        layout.addWidget(self.calc_display)
         
-        # Grille de boutons
+        # Calculator grid
         calc_grid = QGridLayout()
-        calc_grid.setSpacing(4)
+        calc_grid.setSpacing(3)
         
         calc_buttons = [
             ('7', 0, 0), ('8', 0, 1), ('9', 0, 2),
@@ -897,77 +902,388 @@ class POSPage(QWidget):
         
         for text, row, col in calc_buttons:
             btn = QPushButton(text)
-            btn.setMinimumHeight(45)
-            btn.setStyleSheet("""
-                QPushButton {
-                    font-size: 18px;
-                    font-weight: bold;
-                    background-color: #ffffff;
-                    border: 1px solid #ccc;
-                    border-radius: 6px;
-                }
-                QPushButton:hover {
-                    background-color: #e8e8e8;
-                }
-                QPushButton:pressed {
-                    background-color: #d0d0d0;
-                }
-            """)
+            btn.setFixedHeight(36)
+            btn.setCursor(Qt.PointingHandCursor)
             if text == 'C':
-                btn.setStyleSheet(btn.styleSheet() + "background-color: #ffcccc; color: #c0392b;")
+                btn.setStyleSheet("""
+                    QPushButton {
+                        font-size: 15px; font-weight: bold; background-color: #fef2f2;
+                        border: 1px solid #fecaca; border-radius: 6px; color: #dc2626;
+                    }
+                    QPushButton:hover { background-color: #fee2e2; }
+                    QPushButton:pressed { background-color: #fecaca; }
+                """)
                 btn.clicked.connect(self.calc_clear)
             else:
+                btn.setStyleSheet("""
+                    QPushButton {
+                        font-size: 15px; font-weight: bold; background-color: white;
+                        border: 1px solid #d1d5db; border-radius: 6px; color: #111827;
+                    }
+                    QPushButton:hover { background-color: #f3f4f6; }
+                    QPushButton:pressed { background-color: #e5e7eb; }
+                """)
                 btn.clicked.connect(lambda checked, t=text: self.calc_add_digit(t))
             calc_grid.addWidget(btn, row, col)
         
-        calc_layout.addLayout(calc_grid)
+        layout.addLayout(calc_grid)
         
-        # Bouton Ajouter au panier
+        # Add to cart button
         self.calc_add_btn = QPushButton(_("btn_add_to_cart"))
-        self.calc_add_btn.setMinimumHeight(50)
+        self.calc_add_btn.setFixedHeight(40)
+        self.calc_add_btn.setCursor(Qt.PointingHandCursor)
         self.calc_add_btn.setStyleSheet("""
             QPushButton {
-                background-color: #27ae60;
-                color: white;
-                font-size: 16px;
-                font-weight: bold;
-                border: none;
-                border-radius: 8px;
+                background-color: #4f46e5; color: white; font-size: 13px;
+                font-weight: bold; border: none; border-radius: 8px;
             }
-            QPushButton:hover {
-                background-color: #219150;
-            }
+            QPushButton:hover { background-color: #4338ca; }
         """)
         self.calc_add_btn.clicked.connect(self.add_from_calculator)
-        calc_layout.addWidget(self.calc_add_btn)
+        layout.addWidget(self.calc_add_btn)
         
-        self.calc_group.setLayout(calc_layout)
-        layout.addWidget(self.calc_group)
+        # Keep calc_group reference for compatibility
+        self.calc_group = type('obj', (object,), {'setTitle': lambda self, t: None})()
+        
+        panel.setLayout(layout)
+        return panel
+    
+    def create_center_panel(self):
+        """Panneau central: Panier (espace maximisé)"""
+        panel = QFrame()
+        panel.setObjectName("centerPanel")
+        panel.setStyleSheet("""
+            QFrame#centerPanel {
+                background-color: white;
+                border-radius: 10px;
+                border: 1px solid #e2e8f0;
+            }
+        """)
+        
+        layout = QVBoxLayout()
+        layout.setSpacing(6)
+        layout.setContentsMargins(0, 0, 0, 0)
+        
+        _ = i18n_manager.get
+        
+        # Cart header
+        cart_header = QFrame()
+        cart_header.setStyleSheet("""
+            background-color: #1e1b4b;
+            border-top-left-radius: 10px;
+            border-top-right-radius: 10px;
+            padding: 8px 15px;
+        """)
+        cart_header_layout = QHBoxLayout(cart_header)
+        cart_header_layout.setContentsMargins(15, 8, 15, 8)
+        
+        self.cart_label = QLabel(_("label_cart"))
+        self.cart_label.setStyleSheet("font-size: 15px; font-weight: bold; color: #c7d2fe; background: transparent;")
+        cart_header_layout.addWidget(self.cart_label)
+        
+        cart_header_layout.addStretch()
+        
+        self.cart_count_label = QLabel("0 articles")
+        self.cart_count_label.setStyleSheet("font-size: 12px; color: #a5b4fc; background: transparent;")
+        cart_header_layout.addWidget(self.cart_count_label)
+        
+        layout.addWidget(cart_header)
+        
+        # Cart Table (stretch=1 to fill all available space)
+        self.cart_table = QTableWidget()
+        self.cart_table.setColumnCount(5)
+        self.cart_table.setHorizontalHeaderLabels(_("table_headers_cart"))
+        self.cart_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        self.cart_table.setStyleSheet("""
+            QTableWidget {
+                border: none;
+                gridline-color: #f1f5f9;
+                color: #1e293b;
+                background-color: white;
+                selection-background-color: #e0e7ff;
+                selection-color: #1e293b;
+                alternate-background-color: #f8fafc;
+                font-size: 13px;
+            }
+            QHeaderView::section {
+                background-color: #f1f5f9;
+                padding: 10px 8px;
+                font-weight: 700;
+                color: #475569;
+                border: none;
+                border-bottom: 2px solid #e2e8f0;
+                font-size: 12px;
+            }
+            QTableWidget::item {
+                padding: 6px 8px;
+                border-bottom: 1px solid #f1f5f9;
+            }
+            QTableWidget::item:selected {
+                background-color: #e0e7ff;
+                font-weight: bold;
+            }
+        """)
+        self.cart_table.setAlternatingRowColors(True)
+        self.cart_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.cart_table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.cart_table.installEventFilter(self)
+        self.cart_table.cellChanged.connect(self.on_cart_cell_changed)
+        self.cart_table.verticalHeader().setVisible(False)
+        layout.addWidget(self.cart_table, 1)  # stretch=1 — takes ALL available space
         
         panel.setLayout(layout)
         return panel
     
     def create_right_panel(self):
-        """Créer le panneau droit"""
+        """Panneau droit: Total + Paiement + Actions + Client"""
         panel = QFrame()
         panel.setObjectName("rightPanel")
         panel.setStyleSheet("""
             QFrame#rightPanel {
-                background-color: white;
+                background-color: #f8fafc;
                 border-radius: 10px;
-                padding: 15px;
+                border: 1px solid #e2e8f0;
             }
         """)
         
         layout = QVBoxLayout()
-        layout.setSpacing(10)
+        layout.setSpacing(8)
+        layout.setContentsMargins(12, 12, 12, 12)
         
         _ = i18n_manager.get
         
-        # ===== 1. PANIER (en haut pour plus d'espace) =====
-        self.cart_label = QLabel(_("label_cart"))
-        self.cart_label.setStyleSheet("font-size: 18px; font-weight: bold; color: #8b5cf6;")
-        layout.addWidget(self.cart_label)
+        # ===== TOTAL DISPLAY =====
+        total_frame = QFrame()
+        total_frame.setStyleSheet("""
+            QFrame {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, 
+                    stop:0 #1e1b4b, stop:1 #312e81);
+                border-radius: 12px;
+            }
+        """)
+        total_inner = QVBoxLayout(total_frame)
+        total_inner.setContentsMargins(16, 14, 16, 14)
+        total_inner.setSpacing(2)
+        
+        total_title = QLabel("TOTAL")
+        total_title.setStyleSheet("font-size: 11px; font-weight: 700; color: #a5b4fc; letter-spacing: 2px; background: transparent;")
+        total_inner.addWidget(total_title)
+        
+        self.header_total_label = QLabel(_("label_total").format(0.0))
+        self.header_total_label.setStyleSheet("font-size: 32px; font-weight: 900; color: white; background: transparent;")
+        total_inner.addWidget(self.header_total_label)
+        
+        self.header_discount_label = QLabel(_("label_discount").format(0.0))
+        self.header_discount_label.setStyleSheet("font-size: 12px; color: #fbbf24; background: transparent;")
+        total_inner.addWidget(self.header_discount_label)
+        
+        layout.addWidget(total_frame)
+        
+        # ===== PAYMENT METHOD =====
+        pay_method_layout = QHBoxLayout()
+        pay_method_layout.setSpacing(6)
+        
+        self.btn_pay_cash = QPushButton(_("payment_cash"))
+        self.btn_pay_cash.setFixedHeight(42)
+        self.btn_pay_cash.setCursor(Qt.PointingHandCursor)
+        self.btn_pay_cash.setCheckable(True)
+        self.btn_pay_cash.setChecked(True)
+        self.btn_pay_cash.setStyleSheet("""
+            QPushButton {
+                background-color: #f0fdf4; border: 2px solid #86efac; border-radius: 8px;
+                font-size: 13px; font-weight: bold; color: #166534;
+            }
+            QPushButton:checked { background-color: #22c55e; color: white; border-color: #16a34a; }
+            QPushButton:hover { background-color: #bbf7d0; }
+            QPushButton:checked:hover { background-color: #16a34a; }
+        """)
+        self.btn_pay_cash.clicked.connect(lambda: self._set_payment_method('cash'))
+        pay_method_layout.addWidget(self.btn_pay_cash)
+        
+        self.btn_pay_credit = QPushButton(_("payment_credit"))
+        self.btn_pay_credit.setFixedHeight(42)
+        self.btn_pay_credit.setCursor(Qt.PointingHandCursor)
+        self.btn_pay_credit.setCheckable(True)
+        self.btn_pay_credit.setStyleSheet("""
+            QPushButton {
+                background-color: #fef3c7; border: 2px solid #fcd34d; border-radius: 8px;
+                font-size: 13px; font-weight: bold; color: #92400e;
+            }
+            QPushButton:checked { background-color: #f59e0b; color: white; border-color: #d97706; }
+            QPushButton:hover { background-color: #fde68a; }
+            QPushButton:checked:hover { background-color: #d97706; }
+        """)
+        self.btn_pay_credit.clicked.connect(lambda: self._set_payment_method('credit'))
+        pay_method_layout.addWidget(self.btn_pay_credit)
+        
+        self._current_payment_method = 'cash'
+        
+        layout.addLayout(pay_method_layout)
+        
+        # Print receipt checkbox
+        self.print_receipt_cb = QCheckBox(_("checkbox_print_ticket"))
+        self.print_receipt_cb.setChecked(True)
+        self.print_receipt_cb.setStyleSheet("font-size: 12px; padding: 2px 0; color: #4b5563;")
+        layout.addWidget(self.print_receipt_cb)
+        
+        # Keep payment_group reference for compatibility
+        self.payment_group = type('obj', (object,), {'setTitle': lambda self, t: None})()
+        
+        # ===== PAY BUTTON (Large) =====
+        self.pay_btn = QPushButton(_("btn_pay"))
+        self.pay_btn.setMinimumHeight(56)
+        self.pay_btn.setCursor(Qt.PointingHandCursor)
+        self.pay_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #4f46e5, stop:1 #7c3aed);
+                color: white; border: none; border-radius: 12px; font-size: 18px; font-weight: 900;
+                letter-spacing: 1px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #4338ca, stop:1 #6d28d9);
+            }
+        """)
+        self.pay_btn.clicked.connect(self.process_payment)
+        layout.addWidget(self.pay_btn)
+        
+        # ===== ACTION BUTTONS (Compact Grid) =====
+        actions_grid = QGridLayout()
+        actions_grid.setSpacing(5)
+        
+        def make_action_btn(text, color, hover_color):
+            btn = QPushButton(text)
+            btn.setFixedHeight(38)
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {color}; color: white; border: none;
+                    border-radius: 8px; font-size: 12px; font-weight: bold;
+                }}
+                QPushButton:hover {{ background-color: {hover_color}; }}
+            """)
+            return btn
+        
+        self.clear_btn = make_action_btn(_("btn_clear_cart"), "#ef4444", "#dc2626")
+        self.clear_btn.clicked.connect(self.clear_cart)
+        actions_grid.addWidget(self.clear_btn, 0, 0)
+        
+        self.discount_btn = make_action_btn(_("btn_discount"), "#f59e0b", "#d97706")
+        self.discount_btn.clicked.connect(self.apply_discount)
+        actions_grid.addWidget(self.discount_btn, 0, 1)
+        
+        self.return_btn_pos = make_action_btn(_("btn_returns"), "#6b7280", "#4b5563")
+        self.return_btn_pos.clicked.connect(self.open_returns)
+        actions_grid.addWidget(self.return_btn_pos, 1, 0)
+        
+        self.hold_btn = make_action_btn(_("btn_hold"), "#8b5cf6", "#7c3aed")
+        self.hold_btn.clicked.connect(self.hold_current_cart)
+        actions_grid.addWidget(self.hold_btn, 1, 1)
+        
+        self.retrieve_btn = make_action_btn(_("btn_retrieve"), "#3b82f6", "#2563eb")
+        self.retrieve_btn.clicked.connect(self.show_held_carts)
+        actions_grid.addWidget(self.retrieve_btn, 2, 0, 1, 2)
+        
+        layout.addLayout(actions_grid)
+        
+        # ===== SPACER =====
+        layout.addStretch()
+        
+        # ===== CLIENT SELECTOR =====
+        client_sep = QFrame()
+        client_sep.setFrameShape(QFrame.HLine)
+        client_sep.setStyleSheet("background-color: #e2e8f0; max-height: 1px;")
+        layout.addWidget(client_sep)
+        
+        client_title = QLabel("Client")
+        client_title.setStyleSheet("font-size: 12px; font-weight: 800; color: #374151; letter-spacing: 1px;")
+        layout.addWidget(client_title)
+        
+        self.customer_combo = QComboBox()
+        self.customer_combo.setMinimumHeight(38)
+        self.customer_combo.setEditable(True)
+        self.customer_combo.setInsertPolicy(QComboBox.NoInsert)
+        self.customer_combo.lineEdit().setPlaceholderText("Rechercher un client...")
+        self.customer_combo.setStyleSheet("""
+            QComboBox {
+                background-color: white; border: 2px solid #d1d5db; border-radius: 8px;
+                padding: 4px 10px; font-size: 13px;
+            }
+            QComboBox:focus { border-color: #4f46e5; }
+        """)
+        
+        self.load_customers()
+        
+        customer_names = [self.customer_combo.itemText(i) for i in range(self.customer_combo.count())]
+        self.customer_completer_model = QStringListModel(customer_names)
+        
+        self.customer_completer = QCompleter(self.customer_completer_model, self)
+        self.customer_completer.setCompletionMode(QCompleter.PopupCompletion)
+        self.customer_completer.setFilterMode(Qt.MatchContains)
+        self.customer_completer.setCaseSensitivity(Qt.CaseInsensitive)
+        
+        def on_completer_activated(text):
+            for i in range(self.customer_combo.count()):
+                if self.customer_combo.itemText(i) == text:
+                    self.customer_combo.setCurrentIndex(i)
+                    break
+        
+        self.customer_completer.activated.connect(on_completer_activated)
+        self.customer_combo.setCompleter(self.customer_completer)
+        
+        self.customer_combo.lineEdit().installEventFilter(self)
+        self.customer_combo.currentIndexChanged.connect(self.on_customer_selected)
+
+        def on_text_changed(text):
+            if not text.strip():
+                self.customer_combo.setCurrentIndex(0)
+                
+        self.customer_combo.lineEdit().textChanged.connect(on_text_changed)
+        
+        layout.addWidget(self.customer_combo)
+        
+        # Client action buttons
+        client_btns = QHBoxLayout()
+        client_btns.setSpacing(5)
+        
+        self.search_customer_btn = QPushButton("Rechercher")
+        self.search_customer_btn.setFixedHeight(32)
+        self.search_customer_btn.setCursor(Qt.PointingHandCursor)
+        self.search_customer_btn.setToolTip(_("btn_search"))
+        self.search_customer_btn.setStyleSheet("""
+            QPushButton { background-color: #e0f2fe; border: 1px solid #bae6fd; border-radius: 6px; color: #0369a1; font-size: 11px; font-weight: bold; }
+            QPushButton:hover { background-color: #bae6fd; }
+        """)
+        self.search_customer_btn.clicked.connect(self.open_customer_search)
+        client_btns.addWidget(self.search_customer_btn)
+        
+        self.clear_customer_btn = QPushButton("Effacer")
+        self.clear_customer_btn.setFixedHeight(32)
+        self.clear_customer_btn.setCursor(Qt.PointingHandCursor)
+        self.clear_customer_btn.setStyleSheet("""
+            QPushButton { background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; color: #dc2626; font-size: 11px; font-weight: bold; }
+            QPushButton:hover { background-color: #fecaca; }
+        """)
+        self.clear_customer_btn.clicked.connect(self.clear_customer_selection)
+        client_btns.addWidget(self.clear_customer_btn)
+        
+        self.add_customer_btn = QPushButton("Nouveau")
+        self.add_customer_btn.setFixedHeight(32)
+        self.add_customer_btn.setCursor(Qt.PointingHandCursor)
+        self.add_customer_btn.setToolTip("Ajouter un nouveau client")
+        self.add_customer_btn.setStyleSheet("""
+            QPushButton { background-color: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 6px; color: #059669; font-size: 11px; font-weight: bold; }
+            QPushButton:hover { background-color: #a7f3d0; }
+        """)
+        self.add_customer_btn.clicked.connect(self.add_new_customer_from_pos)
+        client_btns.addWidget(self.add_customer_btn)
+        
+        layout.addLayout(client_btns)
+        
+        panel.setLayout(layout)
+        return panel
+    
+
+
         
         self.cart_table = QTableWidget()
         self.cart_table.setColumnCount(5)
@@ -1230,20 +1546,18 @@ class POSPage(QWidget):
         scroll_area.setWidgetResizable(True)
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        scroll_area.setMaximumHeight(210)
         scroll_area.setStyleSheet("""
             QScrollArea {
-                border: 1px solid #e5e7eb;
-                border-radius: 8px;
-                background-color: #fafafa;
+                border: none;
+                background-color: transparent;
             }
             QScrollBar:vertical {
-                width: 8px;
-                background: #f0f0f0;
+                width: 6px;
+                background: transparent;
             }
             QScrollBar::handle:vertical {
                 background: #cbd5e1;
-                border-radius: 4px;
+                border-radius: 3px;
             }
         """)
         
@@ -1986,20 +2300,25 @@ class POSPage(QWidget):
             self.cart_table.setItem(row, 2, QTableWidgetItem(str(item.quantity)))
             self.cart_table.setItem(row, 3, QTableWidgetItem(f"{item.get_subtotal():.2f}"))
             
-            # Bouton supprimer
-            remove_btn = QPushButton("❌")
+            # Remove button (clean style)
+            remove_btn = QPushButton("X")
+            remove_btn.setFixedSize(28, 28)
+            remove_btn.setCursor(Qt.PointingHandCursor)
             remove_btn.setStyleSheet("""
                 QPushButton {
-                    background-color: #e74c3c;
-                    color: white;
-                    border: none;
-                    border-radius: 4px;
+                    background-color: #fef2f2;
+                    color: #dc2626;
+                    border: 1px solid #fecaca;
+                    border-radius: 6px;
+                    font-weight: bold;
+                    font-size: 12px;
                 }
+                QPushButton:hover { background-color: #fee2e2; }
             """)
             remove_btn.clicked.connect(lambda checked, pid=item.product_id: self.remove_from_cart(pid))
             self.cart_table.setCellWidget(row, 4, remove_btn)
         
-        # Mettre à jour les totaux (dans le header gauche)
+        # Update totals
         discount = self.cart.get_discount_amount()
         total = self.cart.get_total()
         
@@ -2007,13 +2326,18 @@ class POSPage(QWidget):
         self.header_discount_label.setText(_("label_discount").format(discount))
         self.header_total_label.setText(_("label_total").format(total))
         
-        self.cart_table.blockSignals(False)  # Réactiver les signaux
+        # Update cart count label
+        item_count = len(self.cart.items)
+        total_qty = sum(item.quantity for item in self.cart.items)
+        if hasattr(self, 'cart_count_label'):
+            self.cart_count_label.setText(f"{item_count} articles ({total_qty:.0f} unités)")
         
-        # Auto-select the last row (most recently added item)
+        self.cart_table.blockSignals(False)
+        
+        # Auto-select the last row
         row_count = self.cart_table.rowCount()
         if row_count > 0:
             self.cart_table.selectRow(row_count - 1)
-            # Don't steal focus from barcode input - keep scanner ready
             if not self.barcode_input.hasFocus():
                 self.barcode_input.setFocus()
     
