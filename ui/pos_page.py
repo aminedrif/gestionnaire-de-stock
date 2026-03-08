@@ -408,14 +408,9 @@ class ProductSearchDialog(QDialog):
             logger.error(f"Search error: {e}")
 
     def add_product(self, product):
-        # We can emit symbol or call parent method directly if passed
-        # Simplest: Emulate POS scan behavior or call add_to_cart
-        # Since this is blocking or non-blocking? 
-        # User wants "search THERE". So maybe Non-Modal or just re-openable?
-        # Implementation: Parent (POS) opens this. This calls parent.add_to_cart(product)
         if self.parent():
             self.parent().add_to_cart(product)
-            # Optional: Feedback toast?
+            self.accept()  # Close dialog after adding product
 
     def on_double_click(self, row, col):
         item = self.table.item(row, 0)
@@ -1203,6 +1198,7 @@ class POSPage(QWidget):
         self.customer_combo.setEditable(True)
         self.customer_combo.setInsertPolicy(QComboBox.NoInsert)
         self.customer_combo.lineEdit().setPlaceholderText("Rechercher un client...")
+        self.customer_combo.setCurrentIndex(-1)  # No selection, show placeholder
         self.customer_combo.setStyleSheet("""
             QComboBox {
                 background-color: white; border: 2px solid #d1d5db; border-radius: 8px;
@@ -2097,16 +2093,13 @@ class POSPage(QWidget):
             self.customer_combo.blockSignals(True)
             self.customer_combo.clear()
             
-            # Add default Anonymous/Walk-in client
-            self.customer_combo.addItem("Client de passage / Anonyme", None)
-            
             customers = customer_manager.get_all_customers()
             for customer in customers:
                 display_name = f"{customer['full_name']} ({customer['code']})"
                 self.customer_combo.addItem(display_name, customer)
             
-            # Select default (Anonyme)
-            self.customer_combo.setCurrentIndex(0)
+            # No selection to show placeholder
+            self.customer_combo.setCurrentIndex(-1)
             
             self.customer_combo.blockSignals(False)
         except Exception as e:
@@ -2355,6 +2348,7 @@ class POSPage(QWidget):
             self.current_customer = None
         else:
             self.current_customer = self.customer_combo.itemData(index)
+        self.barcode_input.setFocus()
     
     def set_customer(self, customer_data):
         """Définir le client actuel (depuis Panier Récupéré)"""
@@ -2376,8 +2370,9 @@ class POSPage(QWidget):
     def clear_customer_selection(self):
         """Réinitialiser la sélection client"""
         if hasattr(self, 'customer_combo'):
-            self.customer_combo.setCurrentIndex(0)
+            self.customer_combo.setCurrentIndex(-1)
         self.current_customer = None
+        self.barcode_input.setFocus()
     
     def clear_cart(self):
         """Vider le panier"""
@@ -2412,6 +2407,7 @@ class POSPage(QWidget):
         """Ouvrir le dialogue de retours"""
         dialog = ReturnDialog(self)
         dialog.exec_()
+        self.barcode_input.setFocus()
     
     def hold_current_cart(self):
         """Mettre le panier actuel en attente"""
@@ -2442,6 +2438,8 @@ class POSPage(QWidget):
             QMessageBox.information(self, _("title_success"), msg)
         else:
             QMessageBox.warning(self, _("title_error"), msg)
+            
+        self.barcode_input.setFocus()
     
     def show_held_carts(self):
         """Afficher les paniers en attente"""
@@ -2499,6 +2497,7 @@ class POSPage(QWidget):
         layout.addLayout(btn_layout)
         
         dialog.exec_()
+        self.barcode_input.setFocus()
         
     def _retrieve_selected_cart(self, dialog, table):
         """Récupérer le panier sélectionné"""
@@ -2567,6 +2566,7 @@ class POSPage(QWidget):
         """Ouvrir le dialogue de recherche produit"""
         dialog = ProductSearchDialog(self)
         dialog.exec_()
+        self.barcode_input.setFocus()
     
     def on_cart_cell_changed(self, row, column):
         """Gérer la modification directe dans le panier (Quantité)"""
@@ -2690,6 +2690,7 @@ class POSPage(QWidget):
         cancel_btn.clicked.connect(dialog.reject)
         
         dialog.exec_()
+        self.barcode_input.setFocus()
     
     def process_payment(self):
         """Traiter le paiement"""
@@ -2862,6 +2863,8 @@ class POSPage(QWidget):
         except Exception as e:
             logger.error(f"Erreur paiement: {e}")
             QMessageBox.critical(self, _("title_error"), f"{_('system_error').format(e)}")
+            
+        self.barcode_input.setFocus()
 
     def update_totals(self):
         """Mettre à jour les totaux"""
