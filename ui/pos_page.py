@@ -664,17 +664,17 @@ class POSPage(QWidget):
         content_layout = QHBoxLayout()
         content_layout.setSpacing(8)
         
-        # Left: Shortcuts + Calculator (~22%)
-        self.left_panel_container = self.create_left_panel()
-        content_layout.addWidget(self.left_panel_container, 22)
+        # Left: Total + Payment + Actions + Client (~30%)
+        self.right_panel_container = self.create_right_panel()
+        content_layout.addWidget(self.right_panel_container, 30)
         
         # Center: Cart (takes max space ~48%)
         self.center_panel = self.create_center_panel()
         content_layout.addWidget(self.center_panel, 48)
         
-        # Right: Total + Payment + Actions + Client (~30%)
-        self.right_panel_container = self.create_right_panel()
-        content_layout.addWidget(self.right_panel_container, 30)
+        # Right: Shortcuts + Calculator (~22%)
+        self.left_panel_container = self.create_left_panel()
+        content_layout.addWidget(self.left_panel_container, 22)
         
         main_layout.addLayout(content_layout, 1)
         
@@ -1070,7 +1070,7 @@ class POSPage(QWidget):
         total_inner.addWidget(total_title)
         
         self.header_total_label = QLabel(_("label_total").format(0.0))
-        self.header_total_label.setStyleSheet("font-size: 32px; font-weight: 900; color: white; background: transparent;")
+        self.header_total_label.setStyleSheet("font-size: 40px; font-weight: 900; color: white; background: transparent;")
         total_inner.addWidget(self.header_total_label)
         
         self.header_discount_label = QLabel(_("label_discount").format(0.0))
