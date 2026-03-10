@@ -23,12 +23,19 @@ class CustomerFormDialog(QDialog):
         self.customer = customer
         _ = i18n_manager.get
         self.setWindowTitle(_("customer_dialog_new") if not customer else _("customer_dialog_edit"))
-        self.setMinimumWidth(400)
+        self.setMinimumWidth(420)
+        self.setMinimumHeight(300)
         self.setup_ui()
         
     def setup_ui(self):
         _ = i18n_manager.get
+        
+        from ui._styles import DIALOG_STYLE, GREEN_BTN, SECONDARY_BTN
+        self.setStyleSheet(DIALOG_STYLE)
+        
         layout = QFormLayout()
+        layout.setSpacing(10)
+        layout.setContentsMargins(16, 16, 16, 16)
         
         self.name_edit = QLineEdit()
         self.phone_edit = QLineEdit()
@@ -47,13 +54,23 @@ class CustomerFormDialog(QDialog):
         
         # Boutons
         btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(10)
+        
         save_btn = QPushButton(_("btn_save"))
         save_btn.setDefault(True)
         save_btn.setAutoDefault(True)
+        save_btn.setMinimumHeight(38)
+        save_btn.setCursor(Qt.PointingHandCursor)
+        save_btn.setStyleSheet(GREEN_BTN)
         save_btn.clicked.connect(self.save)
+        
         cancel_btn = QPushButton(_("btn_cancel"))
+        cancel_btn.setMinimumHeight(38)
+        cancel_btn.setCursor(Qt.PointingHandCursor)
+        cancel_btn.setStyleSheet(SECONDARY_BTN)
         cancel_btn.clicked.connect(self.reject)
         
+        btn_layout.addStretch()
         btn_layout.addWidget(cancel_btn)
         btn_layout.addWidget(save_btn)
         layout.addRow(btn_layout)
@@ -109,22 +126,22 @@ class PaymentDialog(QDialog):
         
     def setup_ui(self):
         _ = i18n_manager.get
+        
+        from ui._styles import DIALOG_STYLE, GREEN_BTN
+        self.setStyleSheet(DIALOG_STYLE)
+        
         layout = QVBoxLayout()
+        layout.setSpacing(12)
+        layout.setContentsMargins(16, 16, 16, 16)
         
         info = QLabel(_("label_current_credit").format(self.customer['current_credit']))
-        info.setStyleSheet("font-size: 16px; font-weight: bold; color: #e74c3c;")
+        info.setStyleSheet("font-size: 15px; font-weight: bold; color: #ef4444;")
         layout.addWidget(info)
         
         form = QFormLayout()
+        form.setSpacing(10)
         self.amount_input = QLineEdit()
         self.amount_input.setPlaceholderText("Montant à payer")
-        self.amount_input.setStyleSheet("""
-            QLineEdit {
-                padding: 10px; border: 2px solid #e5e7eb; border-radius: 8px;
-                font-size: 16px; font-weight: bold;
-            }
-            QLineEdit:focus { border-color: #10b981; }
-        """)
         default_val = min(1000, self.customer['current_credit']) if self.customer['current_credit'] > 0 else ''
         self.amount_input.setText(str(default_val) if default_val else '')
         self.amount_input.textChanged.connect(self.update_remaining)
@@ -138,19 +155,20 @@ class PaymentDialog(QDialog):
         
         # Nouveau solde
         self.remaining_label = QLabel()
-        self.remaining_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #2c3e50;")
+        self.remaining_label.setStyleSheet("font-size: 13px; font-weight: bold; color: #334155;")
         self.update_remaining()
         layout.addWidget(self.remaining_label)
         
         # Checkbox imprimer reçu
         self.print_receipt_cb = QCheckBox(_("checkbox_print_payment"))
         self.print_receipt_cb.setChecked(True)
-        self.print_receipt_cb.setStyleSheet("font-size: 13px; margin-top: 5px;")
         layout.addWidget(self.print_receipt_cb)
         
         btn = QPushButton(_("btn_validate_payment"))
+        btn.setMinimumHeight(38)
+        btn.setCursor(Qt.PointingHandCursor)
+        btn.setStyleSheet(GREEN_BTN)
         btn.clicked.connect(self.save)
-        btn.setStyleSheet("background-color: #2ecc71; color: white; padding: 10px;")
         layout.addWidget(btn)
         
         self.setLayout(layout)
@@ -165,9 +183,9 @@ class PaymentDialog(QDialog):
         remaining = self.customer['current_credit'] - amount
         self.remaining_label.setText(_("label_new_balance").format(remaining))
         if remaining < 0:
-             self.remaining_label.setStyleSheet("font-size: 14px; font-weight: bold; color: green;")
+             self.remaining_label.setStyleSheet("font-size: 13px; font-weight: bold; color: #22c55e;")
         else:
-             self.remaining_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #2c3e50;")
+             self.remaining_label.setStyleSheet("font-size: 13px; font-weight: bold; color: #334155;")
         
     def save(self):
         try:
@@ -235,18 +253,24 @@ class CustomerHistoryDialog(QDialog):
         
     def setup_ui(self):
         _ = i18n_manager.get
+        
+        from ui._styles import DIALOG_STYLE, TAB_WIDGET_STYLE, TABLE_STYLE, SECONDARY_BTN
+        self.setStyleSheet(DIALOG_STYLE)
+        
         layout = QVBoxLayout()
+        layout.setSpacing(12)
+        layout.setContentsMargins(16, 16, 16, 16)
         
         # Info Client Header
         header = QFrame()
-        header.setStyleSheet("background-color: #f8f9fa; border-radius: 8px; padding: 10px;")
+        header.setStyleSheet("background-color: white; border-radius: 8px; padding: 10px; border: 1px solid #dfe3e8;")
         h_layout = QHBoxLayout(header)
         
         info_l = QLabel(f"<b>{self.customer['full_name']}</b><br>Code: {self.customer['code']}")
-        info_l.setStyleSheet("font-size: 16px; color: #2c3e50;")
+        info_l.setStyleSheet("font-size: 14px; color: #212b36;")
         
         credit_l = QLabel(f"{_('label_current_debt')}: <b>{self.customer.get('current_credit', 0)} DA</b>")
-        credit_l.setStyleSheet("font-size: 16px; color: #e74c3c;")
+        credit_l.setStyleSheet("font-size: 14px; color: #ef4444;")
         
         h_layout.addWidget(info_l)
         h_layout.addStretch()
@@ -255,14 +279,17 @@ class CustomerHistoryDialog(QDialog):
         
         # Tabs
         self.tabs = QTabWidget()
+        self.tabs.setStyleSheet(TAB_WIDGET_STYLE)
         self.tabs.addTab(self.create_financial_tab(), "💰 " + _("tab_financial_history"))
         self.tabs.addTab(self.create_purchase_tab(), "🛒 " + _("tab_purchase_history"))
         layout.addWidget(self.tabs)
         
         # Close Button
         close_btn = QPushButton(_("btn_close"))
+        close_btn.setMinimumHeight(38)
+        close_btn.setCursor(Qt.PointingHandCursor)
+        close_btn.setStyleSheet(SECONDARY_BTN)
         close_btn.clicked.connect(self.accept)
-        close_btn.setStyleSheet("min-width: 100px; padding: 8px;")
         
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
@@ -394,26 +421,22 @@ class CustomersPage(QWidget):
         
         _ = i18n_manager.get
         
+        from ui._styles import (header_style, HEADER_TITLE_STYLE, HEADER_SUBTITLE_STYLE,
+                                TABLE_STYLE, SEARCH_INPUT_STYLE, COMBO_STYLE, GREEN_BTN,
+                                stat_card_style, action_btn_style)
+        
         # En-tête avec gradient
         header_frame = QFrame()
-        header_frame.setStyleSheet("""
-            QFrame {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
-                    stop:0 #10b981, stop:1 #059669);
-                border-radius: 12px;
-                padding: 20px;
-                margin-bottom: 5px;
-            }
-        """)
+        header_frame.setStyleSheet(header_style("#10b981", "#059669"))
         header_layout = QHBoxLayout(header_frame)
         
         title_layout = QVBoxLayout()
         header_lbl = QLabel(_("customers_title"))
-        header_lbl.setStyleSheet("font-size: 24px; font-weight: bold; color: white; background: transparent;")
+        header_lbl.setStyleSheet(HEADER_TITLE_STYLE)
         title_layout.addWidget(header_lbl)
         
         subtitle_lbl = QLabel(_("customers_subtitle"))
-        subtitle_lbl.setStyleSheet("font-size: 14px; color: rgba(255,255,255,0.9); background: transparent;")
+        subtitle_lbl.setStyleSheet(HEADER_SUBTITLE_STYLE)
         title_layout.addWidget(subtitle_lbl)
         
         header_layout.addLayout(title_layout)
@@ -426,29 +449,22 @@ class CustomersPage(QWidget):
         
         def make_stat_card(icon, label_text, value_text, color, bg_color):
             card = QFrame()
-            card.setStyleSheet(f"""
-                QFrame {{
-                    background-color: {bg_color};
-                    border-radius: 12px;
-                    border: 1px solid {color}30;
-                    padding: 12px;
-                }}
-            """)
+            card.setStyleSheet(stat_card_style(color, bg_color))
             card_layout = QVBoxLayout(card)
             card_layout.setSpacing(4)
-            card_layout.setContentsMargins(15, 12, 15, 12)
+            card_layout.setContentsMargins(14, 10, 14, 10)
             
             icon_lbl = QLabel(icon)
-            icon_lbl.setStyleSheet(f"font-size: 22px; background: transparent;")
+            icon_lbl.setStyleSheet("font-size: 20px; background: transparent;")
             card_layout.addWidget(icon_lbl)
             
             val_lbl = QLabel(value_text)
-            val_lbl.setStyleSheet(f"font-size: 20px; font-weight: bold; color: {color}; background: transparent;")
+            val_lbl.setStyleSheet(f"font-size: 18px; font-weight: bold; color: {color}; background: transparent;")
             val_lbl.setObjectName("stat_value")
             card_layout.addWidget(val_lbl)
             
             txt_lbl = QLabel(label_text)
-            txt_lbl.setStyleSheet(f"font-size: 12px; color: #6b7280; background: transparent;")
+            txt_lbl.setStyleSheet("font-size: 12px; color: #6b7280; background: transparent;")
             card_layout.addWidget(txt_lbl)
             
             return card
@@ -481,67 +497,27 @@ class CustomersPage(QWidget):
         
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText(_("placeholder_search_customer"))
-        self.search_input.setMinimumHeight(50)
-        self.search_input.setStyleSheet("""
-            QLineEdit {
-                border: 2px solid #e5e7eb;
-                border-radius: 12px;
-                padding: 12px 20px;
-                font-size: 15px;
-                background-color: white;
-                color: #1f2937;
-            }
-            QLineEdit:focus {
-                border-color: #10b981;
-                background-color: #ecfdf5;
-            }
-        """)
+        self.search_input.setMinimumHeight(44)
+        self.search_input.setStyleSheet(SEARCH_INPUT_STYLE)
         self.search_input.textChanged.connect(self.load_customers)
         toolbar.addWidget(self.search_input)
         
         self.filter_combo = QComboBox()
-        self.filter_combo.setMinimumHeight(50)
-        self.filter_combo.setMinimumWidth(200)
+        self.filter_combo.setMinimumHeight(44)
+        self.filter_combo.setMinimumWidth(180)
         self.filter_combo.addItems([
             _("filter_all_customers"), 
             _("filter_with_debt"), 
             _("filter_best_customers")
         ])
-        self.filter_combo.setStyleSheet("""
-            QComboBox {
-                border: 2px solid #e5e7eb;
-                border-radius: 12px;
-                padding: 12px 20px;
-                font-size: 14px;
-                background-color: white;
-                color: #374151;
-            }
-            QComboBox::drop-down {
-                border: none;
-            }
-        """)
+        self.filter_combo.setStyleSheet(COMBO_STYLE)
         self.filter_combo.currentIndexChanged.connect(self.load_customers)
         toolbar.addWidget(self.filter_combo)
         
         self.new_btn = QPushButton(_("btn_new_customer"))
-        self.new_btn.setMinimumHeight(50)
+        self.new_btn.setMinimumHeight(44)
         self.new_btn.setCursor(Qt.PointingHandCursor)
-        self.new_btn.setStyleSheet("""
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
-                    stop:0 #10b981, stop:1 #059669);
-                color: white;
-                border: none;
-                border-radius: 12px;
-                padding: 10px 20px;
-                font-size: 14px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
-                    stop:0 #059669, stop:1 #047857);
-            }
-        """)
+        self.new_btn.setStyleSheet(GREEN_BTN)
         self.new_btn.clicked.connect(self.open_new_dialog)
         toolbar.addWidget(self.new_btn)
         
@@ -554,37 +530,8 @@ class CustomersPage(QWidget):
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.setAlternatingRowColors(True)
-        self.table.verticalHeader().setDefaultSectionSize(50)
-        self.table.setStyleSheet("""
-            QTableWidget {
-                border: 2px solid #e5e7eb;
-                border-radius: 12px;
-                gridline-color: transparent;
-                background-color: white;
-                selection-background-color: #ecfdf5;
-                selection-color: #064e3b;
-                font-size: 14px;
-            }
-            QHeaderView::section {
-                background-color: #f0fdf4;
-                padding: 10px 15px;
-                border: none;
-                border-bottom: 2px solid #bbf7d0;
-                font-weight: bold;
-                color: #166534;
-                font-size: 13px;
-            }
-            QTableWidget::item {
-                padding: 5px 10px;
-                border-bottom: 1px solid #f0fdf4;
-            }
-            QTableWidget::item:selected {
-                font-weight: bold;
-            }
-            QTableWidget::item:alternate {
-                background-color: #f0fdf4;
-            }
-        """)
+        self.table.verticalHeader().setDefaultSectionSize(45)
+        self.table.setStyleSheet(TABLE_STYLE)
 
         layout.addWidget(self.table)
 

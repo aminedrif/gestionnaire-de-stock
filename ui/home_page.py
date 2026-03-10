@@ -314,9 +314,9 @@ class HomePage(QWidget):
         date_frame.setStyleSheet("""
             QFrame {
                 background-color: white;
-                border-radius: 12px;
-                padding: 10px 20px;
-                border: 1px solid #e5e7eb;
+                border-radius: 10px;
+                padding: 10px 18px;
+                border: 1px solid #e2e8f0;
             }
         """)
         date_layout = QVBoxLayout(date_frame)
@@ -360,7 +360,7 @@ class HomePage(QWidget):
             QFrame {
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
                     stop:0 #667eea, stop:1 #764ba2);
-                border-radius: 18px;
+                border-radius: 14px;
             }
         """)
         
@@ -406,7 +406,7 @@ class HomePage(QWidget):
         self.scan_input = QLineEdit()
         self.scan_input.setPlaceholderText(_('scan_placeholder'))
         self.scan_input.setMinimumWidth(250)
-        self.scan_input.setMinimumHeight(50)
+        self.scan_input.setMinimumHeight(44)
         self.scan_input.setStyleSheet("""
             QLineEdit {
                 background-color: rgba(255,255,255,0.95);
@@ -429,7 +429,7 @@ class HomePage(QWidget):
         # Bouton
         scan_btn = QPushButton(_('scan_btn'))
         scan_btn.setCursor(Qt.PointingHandCursor)
-        scan_btn.setMinimumHeight(50)
+        scan_btn.setMinimumHeight(44)
         scan_btn.setStyleSheet("""
             QPushButton {
                 background-color: white;

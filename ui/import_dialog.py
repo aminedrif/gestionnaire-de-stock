@@ -35,7 +35,13 @@ class ImportDialog(QDialog):
         self.setup_ui()
         
     def setup_ui(self):
+        from ui._styles import DIALOG_STYLE, TABLE_STYLE, PRIMARY_BTN, SECONDARY_BTN, FORM_INPUT_STYLE
+        
+        self.setStyleSheet(DIALOG_STYLE)
+        
         layout = QVBoxLayout()
+        layout.setSpacing(15)
+        layout.setContentsMargins(20, 20, 20, 20)
         
         # Instructions
         info = QLabel("""
@@ -44,15 +50,20 @@ class ImportDialog(QDialog):
         2. Les colonnes obligatoires sont : <b>Nom</b> et <b>Prix Vente</b><br>
         3. Colonnes optionnelles : Code, Prix Achat, Stock, Min Stock
         """)
-        info.setStyleSheet("background-color: #e8f6f3; padding: 10px; border-radius: 5px;")
+        info.setStyleSheet("background-color: #f1f5f9; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0; color: #334155;")
         layout.addWidget(info)
         
         # Sélection fichier
         file_layout = QHBoxLayout()
-        self.file_label = QLabel("Aucun fichier sélectionné")
-        self.file_label.setStyleSheet("border: 1px solid #ccc; padding: 5px; background: white;")
+        file_layout.setSpacing(10)
         
-        select_btn = QPushButton("📂 Choisir Fichier")
+        self.file_label = QLabel("Aucun fichier sélectionné")
+        self.file_label.setStyleSheet("border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px; background: white; color: #64748b;")
+        
+        select_btn = QPushButton("📂 Choisir")
+        select_btn.setMinimumHeight(38)
+        select_btn.setCursor(Qt.PointingHandCursor)
+        select_btn.setStyleSheet(SECONDARY_BTN)
         select_btn.clicked.connect(self.select_file)
         
         file_layout.addWidget(self.file_label, 1)
@@ -66,31 +77,42 @@ class ImportDialog(QDialog):
         self.preview_table.setColumnCount(6)
         self.preview_table.setHorizontalHeaderLabels(["Code", "Nom", "Prix Achat", "Prix Vente", "Stock", "Min Stock"])
         self.preview_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.preview_table.setStyleSheet(TABLE_STYLE)
+        self.preview_table.setAlternatingRowColors(True)
+        self.preview_table.verticalHeader().setDefaultSectionSize(40)
         layout.addWidget(self.preview_table)
         
         # Progress Bar
         self.progress = QProgressBar()
         self.progress.setVisible(False)
+        self.progress.setStyleSheet("QProgressBar { border-radius: 4px; text-align: center; } QProgressBar::chunk { background-color: #6366f1; width: 10px; }")
         layout.addWidget(self.progress)
         
         # Boutons
         btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(10)
         
         template_btn = QPushButton("📋 Télécharger Modèle")
         template_btn.clicked.connect(self.download_template)
-        template_btn.setStyleSheet("color: #3498db;")
-        
-        btn_layout.addWidget(template_btn)
-        btn_layout.addStretch()
+        template_btn.setMinimumHeight(38)
+        template_btn.setCursor(Qt.PointingHandCursor)
+        template_btn.setStyleSheet(SECONDARY_BTN + " QPushButton { color: #6366f1; }")
         
         self.import_btn = QPushButton("✅ Lancer l'Importation")
         self.import_btn.setEnabled(False)
+        self.import_btn.setMinimumHeight(38)
+        self.import_btn.setCursor(Qt.PointingHandCursor)
         self.import_btn.clicked.connect(self.run_import)
-        self.import_btn.setStyleSheet("background-color: #27ae60; color: white; padding: 8px 15px; font-weight: bold;")
+        self.import_btn.setStyleSheet(PRIMARY_BTN)
         
         close_btn = QPushButton("Fermer")
+        close_btn.setMinimumHeight(38)
+        close_btn.setCursor(Qt.PointingHandCursor)
+        close_btn.setStyleSheet(SECONDARY_BTN)
         close_btn.clicked.connect(self.reject)
         
+        btn_layout.addWidget(template_btn)
+        btn_layout.addStretch()
         btn_layout.addWidget(close_btn)
         btn_layout.addWidget(self.import_btn)
         

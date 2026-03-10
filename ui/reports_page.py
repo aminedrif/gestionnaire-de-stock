@@ -112,21 +112,16 @@ class ReportsPage(QWidget):
         layout = QVBoxLayout(parent_widget)
         layout.setSpacing(15)
         
-        # En-tête avec gradient (Nouveau Design)
+        from ui._styles import (header_style, HEADER_TITLE_STYLE, DATE_INPUT_STYLE,
+                                TAB_WIDGET_STYLE, TABLE_STYLE, AMBER_BTN, PRIMARY_BTN)
+        
+        # En-tête avec gradient
         header_frame = QFrame()
-        header_frame.setStyleSheet("""
-            QFrame {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
-                    stop:0 #3498db, stop:1 #2980b9);
-                border-radius: 12px;
-                padding: 20px;
-                margin-bottom: 5px;
-            }
-        """)
+        header_frame.setStyleSheet(header_style("#3498db", "#2980b9"))
         header_layout = QHBoxLayout(header_frame)
         
         title_lbl = QLabel(_('reports_title'))
-        title_lbl.setStyleSheet("font-size: 24px; font-weight: bold; color: white; background: transparent;")
+        title_lbl.setStyleSheet(HEADER_TITLE_STYLE)
         header_layout.addWidget(title_lbl)
         header_layout.addStretch()
         
@@ -144,17 +139,9 @@ class ReportsPage(QWidget):
         self.start_date = QDateEdit()
         self.start_date.setCalendarPopup(True)
         self.start_date.setDate(QDate.currentDate().addDays(-30))
-        self.start_date.setMinimumHeight(45)
-        self.start_date.setStyleSheet("""
-            QDateEdit {
-                border: 2px solid #e5e7eb;
-                border-radius: 10px;
-                padding: 8px 15px;
-                font-size: 14px;
-                background-color: white;
-            }
-        """)
-        self.start_date.dateChanged.connect(self.refresh_data) # Auto-refresh
+        self.start_date.setMinimumHeight(40)
+        self.start_date.setStyleSheet(DATE_INPUT_STYLE)
+        self.start_date.dateChanged.connect(self.refresh_data)
         toolbar.addWidget(self.start_date)
         
         toolbar.addWidget(QLabel(_('label_to'), parent_widget))
@@ -162,38 +149,17 @@ class ReportsPage(QWidget):
         self.end_date = QDateEdit()
         self.end_date.setCalendarPopup(True)
         self.end_date.setDate(QDate.currentDate())
-        self.end_date.setMinimumHeight(45)
-        self.end_date.setStyleSheet("""
-            QDateEdit {
-                border: 2px solid #e5e7eb;
-                border-radius: 10px;
-                padding: 8px 15px;
-                font-size: 14px;
-                background-color: white;
-            }
-        """)
+        self.end_date.setMinimumHeight(40)
+        self.end_date.setStyleSheet(DATE_INPUT_STYLE)
         self.end_date.dateChanged.connect(self.refresh_data) # Auto-refresh
         toolbar.addWidget(self.end_date)
         
 
         
         refresh_btn = QPushButton(_('btn_refresh_report'))
-        refresh_btn.setMinimumHeight(45)
+        refresh_btn.setMinimumHeight(40)
         refresh_btn.setCursor(Qt.PointingHandCursor)
-        refresh_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #f39c12;
-                color: white;
-                border: none;
-                border-radius: 10px;
-                padding: 10px 25px;
-                font-size: 14px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #e67e22;
-            }
-        """)
+        refresh_btn.setStyleSheet(AMBER_BTN)
         refresh_btn.clicked.connect(self.refresh_data)
         toolbar.addWidget(refresh_btn)
         
@@ -257,25 +223,7 @@ class ReportsPage(QWidget):
         
         # Onglets Détails
         tabs = QTabWidget()
-        tabs.setStyleSheet("""
-            QTabWidget::pane { border: none; } 
-            QTabBar::tab { 
-                padding: 12px 20px; 
-                font-size: 14px; 
-                font-weight: bold;
-                color: #6b7280;
-                border-bottom: 3px solid transparent;
-                margin-right: 5px;
-            }
-            QTabBar::tab:selected {
-                color: #3498db;
-                border-bottom: 3px solid #3498db;
-            }
-            QTabBar::tab:hover {
-                background-color: #f3f4f6;
-                border-radius: 5px;
-            }
-        """)
+        tabs.setStyleSheet(TAB_WIDGET_STYLE)
         
         # Onglet 1: Ventes par jour (Updated Columns: Date, Revenue, Credit, Cost, Profit)
         self.daily_table = QTableWidget()
@@ -284,8 +232,8 @@ class ReportsPage(QWidget):
         self.daily_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.daily_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.daily_table.setAlternatingRowColors(True)
-        self.daily_table.verticalHeader().setDefaultSectionSize(55)
-        self.daily_table.setStyleSheet(table_style)
+        self.daily_table.verticalHeader().setDefaultSectionSize(45)
+        self.daily_table.setStyleSheet(TABLE_STYLE)
         tabs.addTab(self.daily_table, _('tab_daily_sales'))
         
         # Onglet 2: Top Produits
@@ -295,8 +243,8 @@ class ReportsPage(QWidget):
         self.product_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.product_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.product_table.setAlternatingRowColors(True)
-        self.product_table.verticalHeader().setDefaultSectionSize(55)
-        self.product_table.setStyleSheet(table_style)
+        self.product_table.verticalHeader().setDefaultSectionSize(45)
+        self.product_table.setStyleSheet(TABLE_STYLE)
         tabs.addTab(self.product_table, _('tab_top_products'))
         
         # Onglet 3: Ventes par Utilisateur
@@ -306,8 +254,8 @@ class ReportsPage(QWidget):
         self.user_sales_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.user_sales_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.user_sales_table.setAlternatingRowColors(True)
-        self.user_sales_table.verticalHeader().setDefaultSectionSize(55)
-        self.user_sales_table.setStyleSheet(table_style)
+        self.user_sales_table.verticalHeader().setDefaultSectionSize(45)
+        self.user_sales_table.setStyleSheet(TABLE_STYLE)
         tabs.addTab(self.user_sales_table, _('tab_user_sales'))
         
 
@@ -322,8 +270,8 @@ class ReportsPage(QWidget):
         
         print_closure_btn = QPushButton(_('btn_print_closure'))
         print_closure_btn.clicked.connect(self.print_closure_summary)
-        print_closure_btn.setMinimumHeight(45)
-        print_closure_btn.setStyleSheet("background-color: #34495e; color: white; border-radius: 8px; font-weight: bold; font-size: 14px;")
+        print_closure_btn.setMinimumHeight(40)
+        print_closure_btn.setStyleSheet(PRIMARY_BTN)
         closure_layout.addWidget(print_closure_btn)
         
         tabs.addTab(self.closure_widget, _('tab_closure'))

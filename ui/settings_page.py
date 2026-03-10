@@ -72,26 +72,23 @@ class SettingsPage(QWidget):
         
         layout = QVBoxLayout(parent_widget)
         
+        from ui._styles import (header_style, HEADER_TITLE_STYLE, HEADER_SUBTITLE_STYLE,
+                                TAB_WIDGET_STYLE, GROUP_BOX_STYLE, TABLE_STYLE,
+                                FORM_INPUT_STYLE, PRIMARY_BTN, DANGER_BTN, SECONDARY_BTN,
+                                GREEN_BTN, PURPLE_BTN)
+        
         # En-tête avec gradient
         header_frame = QFrame()
-        header_frame.setStyleSheet("""
-            QFrame {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
-                    stop:0 #475569, stop:1 #334155);
-                border-radius: 12px;
-                padding: 20px;
-                margin-bottom: 20px;
-            }
-        """)
+        header_frame.setStyleSheet(header_style("#475569", "#334155"))
         header_layout = QHBoxLayout(header_frame)
         
         title_layout = QVBoxLayout()
         header = QLabel(_('settings_title'))
-        header.setStyleSheet("font-size: 24px; font-weight: bold; color: white; background: transparent;")
+        header.setStyleSheet(HEADER_TITLE_STYLE)
         title_layout.addWidget(header)
         
         subtitle = QLabel(_('settings_subtitle'))
-        subtitle.setStyleSheet("font-size: 14px; color: rgba(255,255,255,0.9); background: transparent;")
+        subtitle.setStyleSheet(HEADER_SUBTITLE_STYLE)
         title_layout.addWidget(subtitle)
         
         header_layout.addLayout(title_layout)
@@ -100,32 +97,7 @@ class SettingsPage(QWidget):
         
         # Onglets stylisés
         tabs = QTabWidget()
-        tabs.setStyleSheet("""
-            QTabWidget::pane {
-                border: 1px solid #e2e8f0;
-                background: white;
-                border-radius: 12px;
-                top: -1px; 
-            }
-            QTabBar::tab {
-                background: #f1f5f9;
-                border: 1px solid #e2e8f0;
-                padding: 12px 20px;
-                margin-right: 5px;
-                border-top-left-radius: 8px;
-                border-top-right-radius: 8px;
-                color: #64748b;
-                font-weight: bold;
-            }
-            QTabBar::tab:selected {
-                background: white;
-                border-bottom-color: white;
-                color: #0f172a;
-            }
-            QTabBar::tab:hover {
-                background: #e2e8f0;
-            }
-        """)
+        tabs.setStyleSheet(TAB_WIDGET_STYLE)
         
         is_admin = auth_manager.is_admin()
         

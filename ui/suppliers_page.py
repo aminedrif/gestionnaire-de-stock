@@ -24,12 +24,19 @@ class SupplierFormDialog(QDialog):
         self.supplier = supplier
         _ = i18n_manager.get
         self.setWindowTitle(_("supplier_dialog_new") if not supplier else _("supplier_dialog_edit"))
-        self.setMinimumWidth(400)
+        self.setMinimumWidth(420)
+        self.setMinimumHeight(300)
         self.setup_ui()
         
     def setup_ui(self):
         _ = i18n_manager.get
+        
+        from ui._styles import DIALOG_STYLE, GREEN_BTN, SECONDARY_BTN
+        self.setStyleSheet(DIALOG_STYLE)
+        
         layout = QFormLayout()
+        layout.setSpacing(10)
+        layout.setContentsMargins(16, 16, 16, 16)
         
         self.company_name_edit = QLineEdit()
         self.contact_person_edit = QLineEdit()
@@ -45,13 +52,23 @@ class SupplierFormDialog(QDialog):
         
         # Boutons
         btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(10)
+        
         save_btn = QPushButton(_("btn_save"))
         save_btn.setDefault(True)
         save_btn.setAutoDefault(True)
+        save_btn.setMinimumHeight(38)
+        save_btn.setCursor(Qt.PointingHandCursor)
+        save_btn.setStyleSheet(GREEN_BTN)
         save_btn.clicked.connect(self.save)
+        
         cancel_btn = QPushButton(_("btn_cancel"))
+        cancel_btn.setMinimumHeight(38)
+        cancel_btn.setCursor(Qt.PointingHandCursor)
+        cancel_btn.setStyleSheet(SECONDARY_BTN)
         cancel_btn.clicked.connect(self.reject)
         
+        btn_layout.addStretch()
         btn_layout.addWidget(cancel_btn)
         btn_layout.addWidget(save_btn)
         layout.addRow(btn_layout)
@@ -107,13 +124,20 @@ class DebtPaymentDialog(QDialog):
         
     def setup_ui(self):
         _ = i18n_manager.get
+        
+        from ui._styles import DIALOG_STYLE, GREEN_BTN
+        self.setStyleSheet(DIALOG_STYLE)
+        
         layout = QVBoxLayout()
+        layout.setSpacing(12)
+        layout.setContentsMargins(16, 16, 16, 16)
         
         info = QLabel(_("label_current_debt").format(f"{self.supplier['total_debt']:g}"))
-        info.setStyleSheet("font-size: 16px; font-weight: bold; color: #e74c3c;")
+        info.setStyleSheet("font-size: 15px; font-weight: bold; color: #ef4444;")
         layout.addWidget(info)
         
         form = QFormLayout()
+        form.setSpacing(10)
         self.amount_spin = QDoubleSpinBox()
         self.amount_spin.setRange(0, self.supplier['total_debt'])
         self.amount_spin.setSuffix(" DA")
@@ -127,8 +151,10 @@ class DebtPaymentDialog(QDialog):
         layout.addLayout(form)
         
         btn = QPushButton(_("btn_validate_payment"))
+        btn.setMinimumHeight(38)
+        btn.setCursor(Qt.PointingHandCursor)
+        btn.setStyleSheet(GREEN_BTN)
         btn.clicked.connect(self.save)
-        btn.setStyleSheet("background-color: #2ecc71; color: white; padding: 10px;")
         layout.addWidget(btn)
         
         self.setLayout(layout)
@@ -169,26 +195,22 @@ class SuppliersPage(QWidget):
         layout = QVBoxLayout()
         layout.setSpacing(15)
         
+        from ui._styles import (header_style, HEADER_TITLE_STYLE, HEADER_SUBTITLE_STYLE,
+                                TABLE_STYLE, SEARCH_INPUT_STYLE, COMBO_STYLE, AMBER_BTN,
+                                action_btn_style)
+        
         # En-tête avec gradient
         header_frame = QFrame()
-        header_frame.setStyleSheet("""
-            QFrame {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
-                    stop:0 #f59e0b, stop:1 #d97706);
-                border-radius: 12px;
-                padding: 20px;
-                margin-bottom: 5px;
-            }
-        """)
+        header_frame.setStyleSheet(header_style("#f59e0b", "#d97706"))
         header_layout = QHBoxLayout(header_frame)
         
         title_layout = QVBoxLayout()
         self.header = QLabel(_("suppliers_title"))
-        self.header.setStyleSheet("font-size: 24px; font-weight: bold; color: white; background: transparent;")
+        self.header.setStyleSheet(HEADER_TITLE_STYLE)
         title_layout.addWidget(self.header)
         
         self.subtitle = QLabel(_("suppliers_subtitle"))
-        self.subtitle.setStyleSheet("font-size: 14px; color: rgba(255,255,255,0.9); background: transparent;")
+        self.subtitle.setStyleSheet(HEADER_SUBTITLE_STYLE)
         title_layout.addWidget(self.subtitle)
         
         header_layout.addLayout(title_layout)
@@ -201,63 +223,23 @@ class SuppliersPage(QWidget):
         
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText(_("placeholder_search_supplier"))
-        self.search_input.setMinimumHeight(50)
-        self.search_input.setStyleSheet("""
-            QLineEdit {
-                border: 2px solid #e5e7eb;
-                border-radius: 12px;
-                padding: 12px 20px;
-                font-size: 15px;
-                background-color: white;
-                color: #1f2937;
-            }
-            QLineEdit:focus {
-                border-color: #f59e0b;
-                background-color: #fffbeb;
-            }
-        """)
+        self.search_input.setMinimumHeight(44)
+        self.search_input.setStyleSheet(SEARCH_INPUT_STYLE)
         self.search_input.textChanged.connect(self.load_suppliers)
         toolbar.addWidget(self.search_input)
         
         self.filter_combo = QComboBox()
-        self.filter_combo.setMinimumHeight(50)
-        self.filter_combo.setMinimumWidth(180)
+        self.filter_combo.setMinimumHeight(44)
+        self.filter_combo.setMinimumWidth(170)
         self.filter_combo.addItems([_("filter_all_suppliers"), _("filter_debt_suppliers")])
-        self.filter_combo.setStyleSheet("""
-            QComboBox {
-                border: 2px solid #e5e7eb;
-                border-radius: 12px;
-                padding: 12px 20px;
-                font-size: 14px;
-                background-color: white;
-                color: #374151;
-            }
-            QComboBox::drop-down {
-                border: none;
-            }
-        """)
+        self.filter_combo.setStyleSheet(COMBO_STYLE)
         self.filter_combo.currentIndexChanged.connect(self.load_suppliers)
         toolbar.addWidget(self.filter_combo)
         
         self.new_btn = QPushButton(_("btn_new_supplier"))
-        self.new_btn.setMinimumHeight(50)
+        self.new_btn.setMinimumHeight(44)
         self.new_btn.setCursor(Qt.PointingHandCursor)
-        self.new_btn.setStyleSheet("""
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
-                    stop:0 #f59e0b, stop:1 #d97706);
-                color: white;
-                border: none;
-                border-radius: 12px;
-                padding: 10px 20px;
-                font-size: 14px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
-                    stop:0 #d97706, stop:1 #b45309);
-            }
-        """)
+        self.new_btn.setStyleSheet(AMBER_BTN)
         self.new_btn.clicked.connect(self.open_new_dialog)
         toolbar.addWidget(self.new_btn)
         
@@ -271,38 +253,8 @@ class SuppliersPage(QWidget):
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.setAlternatingRowColors(True)
         self.table.setAlternatingRowColors(True)
-        self.table.verticalHeader().setDefaultSectionSize(50)
-        self.table.setStyleSheet("""
-            QTableWidget {
-                border: 2px solid #e5e7eb;
-                border-radius: 12px;
-                gridline-color: transparent;
-                background-color: white;
-                selection-background-color: #fffbeb;
-                selection-color: #92400e;
-                font-size: 14px;
-            }
-            QHeaderView::section {
-                background-color: #fff7ed;
-                padding: 10px 15px;
-                border: none;
-                border-bottom: 2px solid #fed7aa;
-                font-weight: bold;
-                color: #9a3412;
-                font-size: 13px;
-            }
-            QTableWidget::item {
-                padding: 5px 10px;
-                border-bottom: 1px solid #fff7ed;
-            }
-            QTableWidget::item:selected {
-                font-weight: bold;
-            }
-            QTableWidget::item:alternate {
-                background-color: #fff7ed;
-            }
-
-        """)
+        self.table.verticalHeader().setDefaultSectionSize(45)
+        self.table.setStyleSheet(TABLE_STYLE)
         layout.addWidget(self.table)
         
         self.setLayout(layout)

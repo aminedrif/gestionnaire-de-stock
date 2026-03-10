@@ -25,26 +25,44 @@ class ProductFormDialog(QDialog):
         self.product = product
         _ = i18n_manager.get
         self.setWindowTitle(_("product_dialog_new") if not product else _("product_dialog_edit"))
-        self.setMinimumWidth(500)
+        self.setMinimumWidth(520)
+        self.setMinimumHeight(450)
         self.suppliers = supplier_manager.get_all_suppliers()
         self.setup_ui()
         
     def setup_ui(self):
         _ = i18n_manager.get
+        
+        from ui._styles import DIALOG_STYLE, TAB_WIDGET_STYLE, GREEN_BTN, SECONDARY_BTN
+        self.setStyleSheet(DIALOG_STYLE)
+        
         layout = QVBoxLayout()
+        layout.setSpacing(12)
+        layout.setContentsMargins(16, 16, 16, 16)
         
         # Onglets pour organiser les informations
         tabs = QTabWidget()
+        tabs.setStyleSheet(TAB_WIDGET_STYLE)
         
         # Onglet Général
         general_tab = QWidget()
         form_layout = QFormLayout()
+        form_layout.setSpacing(15)
+        form_layout.setContentsMargins(20, 20, 20, 20)
+        
+        from ui._styles import FORM_INPUT_STYLE
         
         self.barcode_edit = QLineEdit()
+        self.barcode_edit.setStyleSheet(FORM_INPUT_STYLE)
+        
         self.name_edit = QLineEdit()
+        self.name_edit.setStyleSheet(FORM_INPUT_STYLE)
+        
         self.name_ar_edit = QLineEdit()
+        self.name_ar_edit.setStyleSheet(FORM_INPUT_STYLE)
         
         self.supplier_combo = QComboBox()
+        self.supplier_combo.setStyleSheet(FORM_INPUT_STYLE)
         self.supplier_combo.setEditable(True)
         self.supplier_combo.setInsertPolicy(QComboBox.NoInsert)
         self.supplier_combo.completer().setCompletionMode(QCompleter.PopupCompletion)
@@ -53,6 +71,7 @@ class ProductFormDialog(QDialog):
             self.supplier_combo.addItem(s['company_name'], s['id'])
             
         self.description_edit = QLineEdit()
+        self.description_edit.setStyleSheet(FORM_INPUT_STYLE)
         
         form_layout.addRow(_("label_barcode"), self.barcode_edit)
         form_layout.addRow(_("label_fullname"), self.name_edit)
@@ -66,25 +85,32 @@ class ProductFormDialog(QDialog):
         # Onglet Prix & Stock
         price_tab = QWidget()
         price_layout = QFormLayout()
+        price_layout.setSpacing(15)
+        price_layout.setContentsMargins(20, 20, 20, 20)
         
         self.purchase_price_spin = QDoubleSpinBox()
+        self.purchase_price_spin.setStyleSheet(FORM_INPUT_STYLE)
         self.purchase_price_spin.setRange(0, 1000000)
         self.purchase_price_spin.setSuffix(" DA")
         self.purchase_price_spin.setDecimals(2)
         
         self.selling_price_spin = QDoubleSpinBox()
+        self.selling_price_spin.setStyleSheet(FORM_INPUT_STYLE)
         self.selling_price_spin.setRange(0, 1000000)
         self.selling_price_spin.setSuffix(" DA")
         self.selling_price_spin.setDecimals(2)
         
         self.stock_spin = QSpinBox()
+        self.stock_spin.setStyleSheet(FORM_INPUT_STYLE)
         self.stock_spin.setRange(0, 100000)
         
         self.min_stock_spin = QSpinBox()
+        self.min_stock_spin.setStyleSheet(FORM_INPUT_STYLE)
         self.min_stock_spin.setRange(0, 1000)
         self.min_stock_spin.setValue(10)
         
         self.expiry_date_edit = QDateEdit()
+        self.expiry_date_edit.setStyleSheet(FORM_INPUT_STYLE)
         self.expiry_date_edit.setCalendarPopup(True)
         self.expiry_date_edit.setDate(QDate.currentDate().addYears(1))
         self.enable_expiry = QCheckBox(_("checkbox_expiry_date"))
@@ -98,7 +124,7 @@ class ProductFormDialog(QDialog):
         price_layout.addRow(self.enable_expiry, self.expiry_date_edit)
         
         price_tab.setLayout(price_layout)
-        tabs.addTab(price_tab, _("tab_price_stock"))
+        tabs.addTab(price_tab, "Prix et Stock")
 
         # Section Création Unitaire (Déplacé ici)
         price_layout.addRow(QLabel(""))
@@ -112,6 +138,7 @@ class ProductFormDialog(QDialog):
         
         # Unit price field
         self.unit_price_spin = QDoubleSpinBox()
+        self.unit_price_spin.setStyleSheet(FORM_INPUT_STYLE)
         self.unit_price_spin.setRange(0, 100000)
         self.unit_price_spin.setSuffix(" DA")
         self.unit_price_spin.setDecimals(2)
@@ -120,12 +147,14 @@ class ProductFormDialog(QDialog):
         
         # Packing Quantity
         self.packing_qty_spin = QSpinBox()
+        self.packing_qty_spin.setStyleSheet(FORM_INPUT_STYLE)
         self.packing_qty_spin.setRange(1, 1000)
         self.packing_qty_spin.setValue(20)
         price_layout.addRow(_("label_packing_qty"), self.packing_qty_spin)
 
         # Unit barcode field (for auto-created unit)
         self.unit_barcode_edit = QLineEdit()
+        self.unit_barcode_edit.setStyleSheet(FORM_INPUT_STYLE)
         self.unit_barcode_edit.setPlaceholderText(_("placeholder_unit_barcode", "Code-barres de l'unité"))
         self.unit_barcode_edit.setEnabled(False)
         price_layout.addRow(_("label_unit_barcode", "Code-barres unité"), self.unit_barcode_edit)
@@ -134,15 +163,23 @@ class ProductFormDialog(QDialog):
         
         # Boutons
         buttons_layout = QHBoxLayout()
+        buttons_layout.setSpacing(10)
+        
         save_btn = QPushButton(_("btn_save"))
         save_btn.setDefault(True)
         save_btn.setAutoDefault(True)
+        save_btn.setMinimumHeight(38)
+        save_btn.setCursor(Qt.PointingHandCursor)
         save_btn.clicked.connect(self.save)
-        save_btn.setStyleSheet("background-color: #2ecc71; color: white;")
+        save_btn.setStyleSheet(GREEN_BTN)
         
         cancel_btn = QPushButton(_("btn_cancel"))
+        cancel_btn.setMinimumHeight(38)
+        cancel_btn.setCursor(Qt.PointingHandCursor)
+        cancel_btn.setStyleSheet(SECONDARY_BTN)
         cancel_btn.clicked.connect(self.reject)
         
+        buttons_layout.addStretch()
         buttons_layout.addWidget(cancel_btn)
         buttons_layout.addWidget(save_btn)
         layout.addLayout(buttons_layout)
@@ -279,25 +316,22 @@ class ProductsPage(QWidget):
         layout.setSpacing(15)
         
         # En-tête avec gradient
+        from ui._styles import (header_style, HEADER_TITLE_STYLE, HEADER_SUBTITLE_STYLE,
+                                HEADER_BADGE_STYLE, TABLE_STYLE, SEARCH_INPUT_STYLE,
+                                COMBO_STYLE, PRIMARY_BTN, PURPLE_BTN, AMBER_BTN,
+                                action_btn_style)
+        
         header_frame = QFrame()
-        header_frame.setStyleSheet("""
-            QFrame {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
-                    stop:0 #3b82f6, stop:1 #2563eb);
-                border-radius: 12px;
-                padding: 20px;
-                margin-bottom: 5px;
-            }
-        """)
+        header_frame.setStyleSheet(header_style("#3b82f6", "#2563eb"))
         header_layout = QHBoxLayout(header_frame)
         
         title_layout = QVBoxLayout()
         self.header = QLabel(_("products_title"))
-        self.header.setStyleSheet("font-size: 24px; font-weight: bold; color: white; background: transparent;")
+        self.header.setStyleSheet(HEADER_TITLE_STYLE)
         title_layout.addWidget(self.header)
         
         self.subtitle = QLabel(_("products_subtitle"))
-        self.subtitle.setStyleSheet("font-size: 14px; color: rgba(255,255,255,0.9); background: transparent;")
+        self.subtitle.setStyleSheet(HEADER_SUBTITLE_STYLE)
         title_layout.addWidget(self.subtitle)
         
         header_layout.addLayout(title_layout)
@@ -305,13 +339,7 @@ class ProductsPage(QWidget):
         
         # Stat rapide dans le header
         self.count_label = QLabel(_("products_count").format(0))
-        self.count_label.setStyleSheet("""
-            background-color: rgba(255,255,255,0.2);
-            color: white;
-            padding: 5px 15px;
-            border-radius: 15px;
-            font-weight: bold;
-        """)
+        self.count_label.setStyleSheet(HEADER_BADGE_STYLE)
         header_layout.addWidget(self.count_label)
         
         layout.addWidget(header_frame)
@@ -323,117 +351,47 @@ class ProductsPage(QWidget):
         # Recherche - Plus grande
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText(_("placeholder_search_product_page"))
-        self.search_input.setMinimumHeight(50)
-        self.search_input.setStyleSheet("""
-            QLineEdit {
-                border: 2px solid #e5e7eb;
-                border-radius: 12px;
-                padding: 12px 20px;
-                font-size: 15px;
-                background-color: white;
-                color: #1f2937;
-            }
-            QLineEdit:focus {
-                border-color: #3b82f6;
-                background-color: #eff6ff;
-            }
-        """)
+        self.search_input.setMinimumHeight(44)
+        self.search_input.setStyleSheet(SEARCH_INPUT_STYLE)
         self.search_input.textChanged.connect(self.load_products)
         toolbar.addWidget(self.search_input)
         
         # Filtres - Plus grand
         self.filter_combo = QComboBox()
-        self.filter_combo.setMinimumHeight(50)
-        self.filter_combo.setMinimumWidth(180)
+        self.filter_combo.setMinimumHeight(44)
+        self.filter_combo.setMinimumWidth(170)
         self.filter_combo.addItems([
             _("filter_all_products"),
             _("filter_low_stock"),
             _("filter_promo"),
             _("filter_expiring")
         ])
-        self.filter_combo.setStyleSheet("""
-            QComboBox {
-                border: 2px solid #e5e7eb;
-                border-radius: 12px;
-                padding: 12px 20px;
-                font-size: 14px;
-                background-color: white;
-                color: #374151;
-            }
-            QComboBox::drop-down {
-                border: none;
-            }
-        """)
+        self.filter_combo.setStyleSheet(COMBO_STYLE)
         self.filter_combo.currentIndexChanged.connect(self.load_products)
         toolbar.addWidget(self.filter_combo)
         
         # Bouton Nouveau - Plus grand
         self.new_btn = QPushButton(_("btn_new_product"))
-        self.new_btn.setMinimumHeight(50)
+        self.new_btn.setMinimumHeight(44)
         self.new_btn.setCursor(Qt.PointingHandCursor)
-        self.new_btn.setStyleSheet("""
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
-                    stop:0 #3b82f6, stop:1 #2563eb);
-                color: white;
-                border: none;
-                border-radius: 12px;
-                padding: 10px 20px;
-                font-size: 14px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
-                    stop:0 #2563eb, stop:1 #1d4ed8);
-            }
-        """)
+        self.new_btn.setStyleSheet(PRIMARY_BTN)
         self.new_btn.clicked.connect(self.open_new_product_dialog)
         toolbar.addWidget(self.new_btn)
         
         # Bouton Importer - Plus grand
         self.import_btn = QPushButton(_("btn_import"))
-        self.import_btn.setMinimumHeight(50)
+        self.import_btn.setMinimumHeight(44)
         self.import_btn.setCursor(Qt.PointingHandCursor)
-        self.import_btn.setStyleSheet("""
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
-                    stop:0 #8b5cf6, stop:1 #7c3aed);
-                color: white;
-                border: none;
-                border-radius: 12px;
-                padding: 10px 20px;
-                font-size: 14px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
-                    stop:0 #7c3aed, stop:1 #6d28d9);
-            }
-        """)
+        self.import_btn.setStyleSheet(PURPLE_BTN)
         self.import_btn.clicked.connect(self.open_import_dialog)
         toolbar.addWidget(self.import_btn)
 
         # Bouton Commande Fournisseur - Nouveau
         self.order_btn = QPushButton(_("btn_order_report"))
-        self.order_btn.setMinimumHeight(50)
+        self.order_btn.setMinimumHeight(44)
         self.order_btn.setCursor(Qt.PointingHandCursor)
         self.order_btn.setToolTip(_("tooltip_order_report"))
-        self.order_btn.setStyleSheet("""
-            QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
-                    stop:0 #f59e0b, stop:1 #d97706);
-                color: white;
-                border: none;
-                border-radius: 12px;
-                padding: 10px 20px;
-                font-size: 14px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
-                    stop:0 #d97706, stop:1 #b45309);
-            }
-        """)
+        self.order_btn.setStyleSheet(AMBER_BTN)
         self.order_btn.clicked.connect(self.generate_order_report)
         toolbar.addWidget(self.order_btn)
         
@@ -449,37 +407,8 @@ class ProductsPage(QWidget):
         self.table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self.show_context_menu)
         self.table.setAlternatingRowColors(True)
-        self.table.verticalHeader().setDefaultSectionSize(50)
-        self.table.setStyleSheet("""
-            QTableWidget {
-                border: 2px solid #e5e7eb;
-                border-radius: 12px;
-                gridline-color: transparent;
-                background-color: white;
-                selection-background-color: #eff6ff;
-                selection-color: #1e3a8a;
-                font-size: 14px;
-            }
-            QHeaderView::section {
-                background-color: #f8fafc;
-                padding: 10px 15px;
-                border: none;
-                border-bottom: 2px solid #e2e8f0;
-                font-weight: bold;
-                color: #475569;
-                font-size: 13px;
-            }
-            QTableWidget::item {
-                padding: 5px 10px;
-                border-bottom: 1px solid #f1f5f9;
-            }
-            QTableWidget::item:selected {
-                font-weight: bold;
-            }
-            QTableWidget::item:alternate {
-                background-color: #f8fafc;
-            }
-        """)
+        self.table.verticalHeader().setDefaultSectionSize(45)
+        self.table.setStyleSheet(TABLE_STYLE)
         layout.addWidget(self.table)
         
         self.setLayout(layout)

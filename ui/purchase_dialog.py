@@ -35,6 +35,11 @@ class PurchaseDialog(QDialog):
         layout = QHBoxLayout(self)
         layout.setSpacing(20)
         
+        from ui._styles import (GROUP_BOX_STYLE, TABLE_STYLE, SEARCH_INPUT_STYLE,
+                                FORM_INPUT_STYLE, GREEN_BTN, SECONDARY_BTN, DIALOG_STYLE)
+        
+        self.setStyleSheet(DIALOG_STYLE)
+        
         # === LEFT PANEL: SEARCH ===
         left_panel = QWidget()
         left_layout = QVBoxLayout(left_panel)
@@ -43,12 +48,13 @@ class PurchaseDialog(QDialog):
         # Search Bar
         _ = i18n_manager.get
         search_group = QGroupBox(_("purchase_search_group"))
+        search_group.setStyleSheet(GROUP_BOX_STYLE)
         search_layout = QVBoxLayout()
         
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText(_("placeholder_search_scan"))
-        self.search_input.setMinimumHeight(45)
-        self.search_input.setStyleSheet("font-size: 14px; padding: 5px;")
+        self.search_input.setMinimumHeight(40)
+        self.search_input.setStyleSheet(SEARCH_INPUT_STYLE)
         self.search_input.textChanged.connect(self.on_search_changed)
         search_layout.addWidget(self.search_input)
         
@@ -62,6 +68,9 @@ class PurchaseDialog(QDialog):
         self.results_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.results_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.results_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.results_table.setAlternatingRowColors(True)
+        self.results_table.verticalHeader().setDefaultSectionSize(45)
+        self.results_table.setStyleSheet(TABLE_STYLE)
         self.results_table.cellDoubleClicked.connect(self.on_result_double_click)
         search_layout.addWidget(self.results_table)
         
@@ -78,6 +87,7 @@ class PurchaseDialog(QDialog):
         # Cart Group
         _ = i18n_manager.get
         cart_group = QGroupBox(_("group_cart").format(self.supplier['company_name']))
+        cart_group.setStyleSheet(GROUP_BOX_STYLE)
         cart_layout = QVBoxLayout()
         
         self.cart_table = QTableWidget()
@@ -87,6 +97,9 @@ class PurchaseDialog(QDialog):
             _("table_header_unit_price"), _("table_header_total"), ""
         ])
         self.cart_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        self.cart_table.setAlternatingRowColors(True)
+        self.cart_table.verticalHeader().setDefaultSectionSize(45)
+        self.cart_table.setStyleSheet(TABLE_STYLE)
         cart_layout.addWidget(self.cart_table)
         
         cart_group.setLayout(cart_layout)
@@ -95,16 +108,18 @@ class PurchaseDialog(QDialog):
         # Payment Group
         _ = i18n_manager.get
         pay_group = QGroupBox(_("group_payment"))
+        pay_group.setStyleSheet(GROUP_BOX_STYLE)
         pay_layout = QFormLayout()
         
         # Total Label
         self.lbl_total = QLabel("0.00 DA")
-        self.lbl_total.setFont(QFont("Arial", 18, QFont.Bold))
-        self.lbl_total.setStyleSheet("color: #e74c3c;")
+        self.lbl_total.setFont(QFont("Arial", 16, QFont.Bold))
+        self.lbl_total.setStyleSheet("color: #ef4444;")
         pay_layout.addRow(_("label_total_to_pay"), self.lbl_total)
         
         # Payment Source
         self.combo_source = QComboBox()
+        self.combo_source.setStyleSheet(FORM_INPUT_STYLE)
         self.combo_source.addItems([
             _("payment_cash"), _("payment_credit")
         ])
@@ -116,16 +131,17 @@ class PurchaseDialog(QDialog):
         self.spin_paid.setRange(0, 99999999)
         self.spin_paid.setSuffix(" DA")
         self.spin_paid.setDecimals(2)
-        self.spin_paid.setStyleSheet("font-size: 14px; font-weight: bold;")
+        self.spin_paid.setStyleSheet(FORM_INPUT_STYLE)
         self.spin_paid.valueChanged.connect(self.update_debt_label)
         pay_layout.addRow(_("label_amount_paid"), self.spin_paid)
         
         # Remaining Debt
         self.lbl_debt = QLabel("0.00 DA")
-        self.lbl_debt.setStyleSheet("font-weight: bold; color: gray;")
+        self.lbl_debt.setStyleSheet("font-weight: bold; color: #94a3b8;")
         pay_layout.addRow(_("label_remaining_debt"), self.lbl_debt)
         
         self.txt_notes = QLineEdit()
+        self.txt_notes.setStyleSheet(FORM_INPUT_STYLE)
         self.txt_notes.setPlaceholderText(_("label_notes"))
         pay_layout.addRow(_("label_notes"), self.txt_notes)
         
@@ -135,12 +151,15 @@ class PurchaseDialog(QDialog):
         # Buttons
         btn_layout = QHBoxLayout()
         self.btn_save = QPushButton(_("btn_validate_purchase"))
-        self.btn_save.setMinimumHeight(50)
-        self.btn_save.setStyleSheet("background-color: #27ae60; color: white; font-weight: bold; font-size: 16px;")
+        self.btn_save.setMinimumHeight(44)
+        self.btn_save.setCursor(Qt.PointingHandCursor)
+        self.btn_save.setStyleSheet(GREEN_BTN)
         self.btn_save.clicked.connect(self.validate_purchase)
         
         self.btn_cancel = QPushButton("Annuler")
-        self.btn_cancel.setMinimumHeight(50)
+        self.btn_cancel.setMinimumHeight(44)
+        self.btn_cancel.setCursor(Qt.PointingHandCursor)
+        self.btn_cancel.setStyleSheet(SECONDARY_BTN)
         self.btn_cancel.clicked.connect(self.reject)
         
         btn_layout.addWidget(self.btn_cancel)

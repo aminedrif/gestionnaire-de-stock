@@ -32,11 +32,17 @@ class SaleDetailsDialog(QDialog):
         
     def setup_ui(self):
         _ = i18n_manager.get
+        
+        from ui._styles import DIALOG_STYLE, TABLE_STYLE, SECONDARY_BTN
+        self.setStyleSheet(DIALOG_STYLE)
+        
         layout = QVBoxLayout(self)
+        layout.setSpacing(12)
+        layout.setContentsMargins(16, 16, 16, 16)
         
         # Info client/vendeur
         self.info_label = QLabel(_("label_loading"))
-        self.info_label.setStyleSheet("font-size: 14px; font-weight: bold; margin-bottom: 10px;")
+        self.info_label.setStyleSheet("font-size: 13px; font-weight: bold; margin-bottom: 8px;")
         layout.addWidget(self.info_label)
         
         # Table des articles
@@ -45,16 +51,22 @@ class SaleDetailsDialog(QDialog):
         self.items_table.setHorizontalHeaderLabels(_("table_headers_sale_items"))
         self.items_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.items_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.items_table.setAlternatingRowColors(True)
+        self.items_table.verticalHeader().setDefaultSectionSize(40)
+        self.items_table.setStyleSheet(TABLE_STYLE)
         layout.addWidget(self.items_table)
         
         # Total
         self.total_label = QLabel(_("label_dialog_total").format(0.0))
         self.total_label.setAlignment(Qt.AlignRight)
-        self.total_label.setStyleSheet("font-size: 18px; font-weight: bold; color: #2c3e50; margin-top: 10px;")
+        self.total_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #212b36; margin-top: 8px;")
         layout.addWidget(self.total_label)
         
         # Bouton fermer
         close_btn = QPushButton(_("btn_close_dialog"))
+        close_btn.setMinimumHeight(38)
+        close_btn.setCursor(Qt.PointingHandCursor)
+        close_btn.setStyleSheet(SECONDARY_BTN)
         close_btn.clicked.connect(self.accept)
         layout.addWidget(close_btn)
         
@@ -102,44 +114,31 @@ class SalesHistoryPage(QWidget):
         layout.setSpacing(15)
         layout.setContentsMargins(20, 20, 20, 20)
         
+        from ui._styles import (header_style, HEADER_TITLE_STYLE, HEADER_SUBTITLE_STYLE,
+                                TABLE_STYLE, SEARCH_INPUT_STYLE, COMBO_STYLE, DATE_INPUT_STYLE,
+                                PRIMARY_BTN, AMBER_BTN, DANGER_BTN, SECONDARY_BTN)
+        
         # En-tête Moderne
         header_frame = QFrame()
-        header_frame.setStyleSheet("""
-            QFrame {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
-                    stop:0 #4f46e5, stop:1 #7c3aed);
-                border-radius: 12px;
-                padding: 20px;
-            }
-        """)
+        header_frame.setStyleSheet(header_style("#4f46e5", "#7c3aed"))
         header_layout = QHBoxLayout(header_frame)
         
         title_layout = QVBoxLayout()
         self.header = QLabel(_("sales_history_title"))
-        self.header.setStyleSheet("font-size: 24px; font-weight: bold; color: white; background: transparent;")
+        self.header.setStyleSheet(HEADER_TITLE_STYLE)
         title_layout.addWidget(self.header)
         
         self.subtitle = QLabel(_("sales_history_subtitle"))
-        self.subtitle.setStyleSheet("font-size: 14px; color: rgba(255,255,255,0.9); background: transparent;")
+        self.subtitle.setStyleSheet(HEADER_SUBTITLE_STYLE)
         title_layout.addWidget(self.subtitle)
         
         header_layout.addLayout(title_layout)
         header_layout.addStretch()
         
-        # Bouton export (Prévu)
+        # Bouton export
         self.export_btn = QPushButton(_("btn_export_excel"))
-        self.export_btn.setMinimumHeight(40)
-        self.export_btn.setStyleSheet("""
-            QPushButton {
-                background-color: rgba(255,255,255,0.2);
-                color: white;
-                border: 1px solid white;
-                border-radius: 8px;
-                padding: 0 15px;
-                font-weight: bold;
-            }
-            QPushButton:hover { background-color: rgba(255,255,255,0.3); }
-        """)
+        self.export_btn.setMinimumHeight(36)
+        self.export_btn.setStyleSheet(SECONDARY_BTN)
         self.export_btn.clicked.connect(self.export_to_csv)
         header_layout.addWidget(self.export_btn)
         
@@ -147,13 +146,14 @@ class SalesHistoryPage(QWidget):
         
         # Barre de Filtres
         filter_card = QFrame()
-        filter_card.setStyleSheet("background-color: white; border-radius: 10px; border: 1px solid #e5e7eb;")
+        filter_card.setStyleSheet("background-color: white; border-radius: 10px; border: 1px solid #e2e8f0;")
         filter_layout = QHBoxLayout(filter_card)
-        filter_layout.setContentsMargins(15, 10, 15, 10)
+        filter_layout.setContentsMargins(12, 8, 12, 8)
         
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText(_("placeholder_search_sales"))
-        self.search_input.setMinimumHeight(40)
+        self.search_input.setMinimumHeight(36)
+        self.search_input.setStyleSheet(SEARCH_INPUT_STYLE)
         self.search_input.textChanged.connect(self.load_sales)
         filter_layout.addWidget(self.search_input)
         
@@ -162,6 +162,8 @@ class SalesHistoryPage(QWidget):
         self.start_date = QDateEdit()
         self.start_date.setCalendarPopup(True)
         self.start_date.setDate(QDate.currentDate().addDays(-7))
+        self.start_date.setMinimumHeight(36)
+        self.start_date.setStyleSheet(DATE_INPUT_STYLE)
         self.start_date.dateChanged.connect(self.load_sales)
         filter_layout.addWidget(self.start_date)
         
@@ -170,10 +172,14 @@ class SalesHistoryPage(QWidget):
         self.end_date = QDateEdit()
         self.end_date.setCalendarPopup(True)
         self.end_date.setDate(QDate.currentDate())
+        self.end_date.setMinimumHeight(36)
+        self.end_date.setStyleSheet(DATE_INPUT_STYLE)
         self.end_date.dateChanged.connect(self.load_sales)
         filter_layout.addWidget(self.end_date)
         
         self.status_combo = QComboBox()
+        self.status_combo.setMinimumHeight(36)
+        self.status_combo.setStyleSheet(COMBO_STYLE)
         self.status_combo.addItems([
             _("filter_status_all"), 
             _("filter_status_completed"), 
@@ -185,6 +191,7 @@ class SalesHistoryPage(QWidget):
         
         refresh_btn = QPushButton("🔄")
         refresh_btn.setFixedWidth(40)
+        refresh_btn.setMinimumHeight(36)
         refresh_btn.clicked.connect(self.load_sales)
         filter_layout.addWidget(refresh_btn)
         
@@ -202,6 +209,9 @@ class SalesHistoryPage(QWidget):
         self.sales_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.sales_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.sales_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.sales_table.setAlternatingRowColors(True)
+        self.sales_table.verticalHeader().setDefaultSectionSize(45)
+        self.sales_table.setStyleSheet(TABLE_STYLE)
         self.sales_table.doubleClicked.connect(self.view_sale_details)
         layout.addWidget(self.sales_table)
         
@@ -209,33 +219,23 @@ class SalesHistoryPage(QWidget):
         actions_layout = QHBoxLayout()
         
         self.details_btn = QPushButton(_("btn_view_details"))
-        self.details_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #3b82f6; color: white; padding: 10px 20px; border-radius: 8px; font-weight: bold;
-            }
-            QPushButton:hover { background-color: #2563eb; }
-        """)
+        self.details_btn.setMinimumHeight(38)
+        self.details_btn.setCursor(Qt.PointingHandCursor)
+        self.details_btn.setStyleSheet(PRIMARY_BTN)
         self.details_btn.clicked.connect(self.view_sale_details)
         actions_layout.addWidget(self.details_btn)
         
         self.reprint_btn = QPushButton(_("btn_reprint"))
-        self.reprint_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #f39c12; color: white; padding: 10px 20px; border-radius: 8px; font-weight: bold;
-            }
-            QPushButton:hover { background-color: #e67e22; }
-        """)
-        self.reprint_btn.clicked.connect(self.reprint_sale)
+        self.reprint_btn.setMinimumHeight(38)
+        self.reprint_btn.setCursor(Qt.PointingHandCursor)
+        self.reprint_btn.setStyleSheet(AMBER_BTN)
         self.reprint_btn.clicked.connect(self.reprint_sale)
         actions_layout.addWidget(self.reprint_btn)
         
         self.return_btn = QPushButton(_("btn_return_action"))
-        self.return_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #ef4444; color: white; padding: 10px 20px; border-radius: 8px; font-weight: bold;
-            }
-            QPushButton:hover { background-color: #dc2626; }
-        """)
+        self.return_btn.setMinimumHeight(38)
+        self.return_btn.setCursor(Qt.PointingHandCursor)
+        self.return_btn.setStyleSheet(DANGER_BTN)
         self.return_btn.clicked.connect(self.open_return)
         actions_layout.addWidget(self.return_btn)
         

@@ -75,25 +75,21 @@ class ReturnsPage(QWidget):
         layout = QVBoxLayout(parent_widget)
         layout.setContentsMargins(10, 10, 10, 10)
 
+        from ui._styles import (header_style, HEADER_TITLE_STYLE, HEADER_SUBTITLE_STYLE,
+                                TAB_WIDGET_STYLE, TABLE_STYLE, SEARCH_INPUT_STYLE,
+                                GREEN_BTN, AMBER_BTN, DANGER_BTN, PRIMARY_BTN, SECONDARY_BTN)
+
         # En-tête avec gradient
         header_frame = QFrame()
-        header_frame.setStyleSheet("""
-            QFrame {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
-                    stop:0 #10b981, stop:1 #059669);
-                border-radius: 12px;
-                padding: 15px;
-                margin-bottom: 5px;
-            }
-        """)
+        header_frame.setStyleSheet(header_style("#10b981", "#059669"))
         header_layout = QHBoxLayout(header_frame)
         
         title_layout = QVBoxLayout()
         title = QLabel(_('returns_title'))
-        title.setStyleSheet("font-size: 22px; font-weight: bold; color: white; background: transparent;")
+        title.setStyleSheet(HEADER_TITLE_STYLE)
         
         subtitle = QLabel(_('returns_subtitle'))
-        subtitle.setStyleSheet("font-size: 13px; color: rgba(255,255,255,0.9); background: transparent;")
+        subtitle.setStyleSheet(HEADER_SUBTITLE_STYLE)
         
         title_layout.addWidget(title)
         title_layout.addWidget(subtitle)
@@ -104,27 +100,7 @@ class ReturnsPage(QWidget):
         
         # Onglets
         self.tabs = QTabWidget()
-        self.tabs.setStyleSheet("""
-            QTabWidget::pane {
-                border: 1px solid #e5e7eb;
-                background: white;
-                border-radius: 8px;
-            }
-            QTabBar::tab {
-                background: #f3f4f6;
-                color: #4b5563;
-                padding: 10px 20px;
-                border-top-left-radius: 8px;
-                border-top-right-radius: 8px;
-                margin-right: 2px;
-                font-weight: bold;
-            }
-            QTabBar::tab:selected {
-                background: white;
-                color: #10b981;
-                border-bottom: 2px solid #10b981;
-            }
-        """)
+        self.tabs.setStyleSheet(TAB_WIDGET_STYLE)
         
         # Tab 1: Nouveau Retour
         self.tab_new_return = QWidget()
